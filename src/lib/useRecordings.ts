@@ -45,7 +45,7 @@ export function useRecordings(initialLimit: number = 10) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialLimit]);
 
   // Load more recordings
   const loadMore = useCallback(async () => {

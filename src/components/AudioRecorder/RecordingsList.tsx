@@ -42,12 +42,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
       const documents = await databaseService.listAudioDocuments();
       const formattedRecordings = documents.map(doc => ({
         id: doc.$id,
-        data: {
-          sessionId: doc.sessionId,
-          microphoneAudioFileId: doc.microphoneAudioFileId,
-          systemAudioFileId: doc.systemAudioFileId,
-          combinedAudioFileId: doc.combinedAudioFileId
-        },
+        data: doc,
         created: doc.$createdAt
       }));
       

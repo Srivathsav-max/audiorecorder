@@ -1,4 +1,4 @@
-import { storageService, databaseService, AudioFileDocument } from '@/lib/appwrite';
+import { storageService, databaseService, AudioFileDocument, CreateAudioDocument } from '@/lib/appwrite';
 import { getFormattedDateTime } from './utils';
 
 // Save audio file to Appwrite storage
@@ -54,7 +54,7 @@ export const saveRecordingToAppwrite = async (
     }
     
     // Create document in database
-    const documentData: AudioFileDocument = {
+    const documentData: CreateAudioDocument = {
       sessionId,
       microphoneAudioFileId: microphoneFileId,
       systemAudioFileId: systemFileId,

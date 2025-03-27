@@ -8,7 +8,6 @@ import { AudioRecorderProps, RecordedAudio, AudioDevice } from './types';
 import { DeviceSelector } from './DeviceSelector';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import {
-  getFormattedDateTime,
   createSessionId,
   combineAudioStreams,
   checkBrowserSupport,
@@ -359,7 +358,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   if (!browserSupport.supported) {
     return (
       <div className="p-4 text-red-800 bg-red-50 rounded-lg shadow-sm">
-        <p className="font-medium mb-2">Your browser doesn't support audio recording</p>
+        <p className="font-medium mb-2">Your browser doesn&apos;t support audio recording</p>
         <ul className="list-disc pl-5 space-y-1 text-sm">
           <li>MediaRecorder API: {browserSupport.mediaRecorderSupported ? '✓' : '✗'}</li>
           <li>Microphone Access: {browserSupport.microphoneSupported ? '✓' : '✗'}</li>
@@ -455,7 +454,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
             <WaveformVisualizer
               isRecording={isRecording}
               isProcessing={isProcessing}
-              deviceId={selectedMicrophoneId}
               microphoneStream={microphoneStream}
               systemStream={systemStream}
             />

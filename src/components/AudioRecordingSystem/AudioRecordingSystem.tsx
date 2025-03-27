@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { AudioRecorder, RecordingsList } from '@/components/AudioRecorder';
 import { RecordedAudio } from '@/components/AudioRecorder/types';
 import { toast } from 'sonner';
@@ -12,8 +12,6 @@ interface AudioRecordingSystemProps {
 export const AudioRecordingSystem: React.FC<AudioRecordingSystemProps> = ({
   className = '',
 }) => {
-  const [refresh, setRefresh] = useState<number>(0);
-
   const handleRecordingStart = () => {
     console.log('Recording started');
   };
@@ -29,11 +27,6 @@ export const AudioRecordingSystem: React.FC<AudioRecordingSystemProps> = ({
     }
     
     // Trigger a refresh of recordings list
-    setRefresh(prev => prev + 1);
-  };
-
-  const handleRefresh = () => {
-    setRefresh(prev => prev + 1);
   };
 
   return (
@@ -45,7 +38,7 @@ export const AudioRecordingSystem: React.FC<AudioRecordingSystemProps> = ({
         />
       
       {/* Recordings List Section */}
-      <RecordingsList onRefresh={handleRefresh} />
+        <RecordingsList onRefresh={() => {}} />
     </div>
   );
 };

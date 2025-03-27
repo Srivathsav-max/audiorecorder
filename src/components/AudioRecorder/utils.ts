@@ -37,7 +37,7 @@ export const combineAudioStreams = async (
 ): Promise<Blob | null> => {
   try {
     // Create an AudioContext with CD quality for faster processing
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+    const audioContext = new (window.AudioContext || ((window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext))({
       sampleRate: 44100 // CD quality sample rate is faster to process
     });
 
@@ -127,7 +127,7 @@ export const convertToHighQualityWav = async (blob: Blob): Promise<Blob> => {
   try {
     // Create audio context with lower sample rate for faster processing
     // 44.1kHz is still CD quality and processes faster than 48kHz
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+    const audioContext = new (window.AudioContext || ((window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext))({
       sampleRate: 44100
     });
 

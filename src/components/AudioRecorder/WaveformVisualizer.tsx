@@ -5,7 +5,6 @@ import React, { useRef, useState, useEffect } from 'react';
 interface WaveformVisualizerProps {
   isRecording: boolean;
   isProcessing: boolean;
-  deviceId: string;
   microphoneStream?: MediaStream | null; // Add prop for actual microphone stream
   systemStream?: MediaStream | null; // Add prop for actual system stream
 }
@@ -13,7 +12,6 @@ interface WaveformVisualizerProps {
 export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
   isRecording,
   isProcessing,
-  deviceId,
   microphoneStream,
   systemStream
 }) => {
