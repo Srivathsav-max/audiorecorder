@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AudioRecorder } from '../AudioRecorder';
 import { RecordingList } from '../RecordingList';
 import { RecordedAudio } from '../AudioRecorder/types';
 import { Card, CardContent } from '@/components/ui/card';
+import { useRecordings } from '@/lib/useRecordings';
 import Image from 'next/image';
 
 interface DualAudioRecorderProps {
@@ -20,80 +21,81 @@ interface DualAudioRecorderProps {
 export const DualAudioRecorder: React.FC<DualAudioRecorderProps> = ({
   className = '',
 }) => {
-  // State to store recordings
-  const [recordings, setRecordings] = useState<RecordedAudio[]>([]);
+  // Use our custom hook to manage recordings from the server
+  const { 
+    recordings, 
+    loading, 
+    error, 
+    fetchRecordings, 
+    addRecording, 
+    deleteRecording 
+  } = useRecordings();
+  
   const [isRecording, setIsRecording] = useState(false);
-  
-  // Load saved recordings from localStorage on component mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedRecordings = localStorage.getItem('audioRecordings');
-      if (savedRecordings) {
-        try {
-          setRecordings(JSON.parse(savedRecordings));
-        } catch (error) {
-          console.error('Error parsing saved recordings:', error);
-        }
-      }
-    }
-  }, []);
-  
-  // Save recordings to localStorage when they change
-  useEffect(() => {
-    if (typeof window !== 'undefined' && recordings.length > 0) {
-      localStorage.setItem('audioRecordings', JSON.stringify(recordings));
-    }
-  }, [recordings]);
-  
+
   // Handler for when recording starts
   const handleRecordingStart = () => {
     setIsRecording(true);
   };
-  
+
   // Handler for when recording stops
   const handleRecordingStop = (newRecording: RecordedAudio) => {
     setIsRecording(false);
-    setRecordings(prev => [newRecording, ...prev]);
+    
+    // Add the new recording to our list
+    addRecording(newRecording);
   };
-  
+
   // Handler for removing a recording
   const handleRemoveRecording = (index: number) => {
-    setRecordings(prev => prev.filter((_, i) => i !== index));
+    deleteRecording(index);
   };
-  
+
   return (
-    <div className={`max-w-3xl mx-auto p-5 sm:p-8 ${className}`}>
-      <div className="flex justify-center mb-8">
-        <Image
-          src="/watchrx-logo-new.png"
-          alt="WatchRX Logo"
-          width={200}
-          height={60}
-          className="mb-6"
-          priority
-        />
+    <div className={`max-w-4xl mx-auto p-5 sm:p-8 ${className}`}>
+      {/* Hero Section */}
+      <div className="relative bg-gradient-to-b from-primary/5 to-background rounded-2xl p-8 mb-12">
+        <div className="absolute inset-0 bg-grid-white/10 [mask-image:radial-gradient(white,transparent_70%)] rounded-2xl" />
+        
+        <div className="relative flex flex-col items-center text-center">
+          <Image
+            src="/watchrx-logo-new.png"
+            alt="WatchRX Logo"
+            width={200}
+            height={60}
+            className="mb-6 drop-shadow-sm"
+            priority
+          />
+          
+          <h1 className="text-3xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
+            Healthcare Communication Recorder
+          </h1>
+          
+          <p className="text-muted-foreground max-w-2xl text-base leading-relaxed">
+            Enterprise-grade dual audio capture system designed for healthcare professionals.
+            Securely records and archives communication sessions with integrated system and microphone audio.
+          </p>
+        </div>
       </div>
-      <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold mb-3">Healthcare Communication Recorder</h1>
-        <p className="text-gray-600 text-base leading-relaxed">
-          Enterprise-grade dual audio capture system designed for healthcare professionals. 
-          Securely records and archives communication sessions with integrated system and microphone audio.
-        </p>
-      </div>
-      
-      <Card className="mb-8">
-        <CardContent className="p-6">
-          <AudioRecorder 
+
+      {/* Recorder Section */}
+      <Card className="mb-12 border-2 shadow-lg">
+        <CardContent className="p-8">
+          <AudioRecorder
             onRecordingStart={handleRecordingStart}
             onRecordingStop={handleRecordingStop}
           />
         </CardContent>
       </Card>
-      
-      <div className="mt-8">
-        <RecordingList 
+
+      {/* Recordings Section */}
+      <div className="space-y-6">
+        <RecordingList
           recordings={recordings}
           onRemoveRecording={handleRemoveRecording}
+          isLoading={loading}
+          error={error}
+          onRetry={fetchRecordings}
         />
       </div>
     </div>

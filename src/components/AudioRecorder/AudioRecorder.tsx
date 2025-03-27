@@ -14,31 +14,22 @@ import {
   convertToHighQualityWav
 } from './utils';
 
-/**
- * AudioRecorder component for recording both microphone and system audio
- */
 export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   onRecordingStart,
   onRecordingStop,
   className = '',
 }) => {
-  // State to track recording status and data
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [microphoneStream, setMicrophoneStream] = useState<MediaStream | null>(null);
   const [systemStream, setSystemStream] = useState<MediaStream | null>(null);
-  const [microphoneLevel, setMicrophoneLevel] = useState<number>(0);
-  const [systemLevel, setSystemLevel] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
 
-  // References for audio recording and analysis
+  // References for audio recording
   const sessionIdRef = useRef<string>('');
   const microphoneChunksRef = useRef<Blob[]>([]);
   const systemChunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef<number | null>(null);
-  const microphoneAnalyserRef = useRef<AnalyserNode | null>(null);
-  const systemAnalyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | undefined>(undefined);
 
   // Browser support state
   const [browserSupport, setBrowserSupport] = useState<{
@@ -53,61 +44,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     mediaRecorderSupported: false,
   });
 
-  // Set up audio analysis
-  const setupAudioAnalysis = useCallback((stream: MediaStream, isSystem: boolean) => {
-    const audioContext = new AudioContext();
-    const source = audioContext.createMediaStreamSource(stream);
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    source.connect(analyser);
-
-    if (isSystem) {
-      systemAnalyserRef.current = analyser;
-    } else {
-      microphoneAnalyserRef.current = analyser;
-    }
-  }, []);
-
-  // Update audio levels
-  const updateLevels = useCallback(() => {
-    if (!isRecording) return;
-
-    const dataArray = new Uint8Array(128);
-
-    if (microphoneAnalyserRef.current) {
-      microphoneAnalyserRef.current.getByteFrequencyData(dataArray);
-      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-      setMicrophoneLevel(average / 128);
-    }
-
-    if (systemAnalyserRef.current) {
-      systemAnalyserRef.current.getByteFrequencyData(dataArray);
-      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-      setSystemLevel(average / 128);
-    }
-
-    animationFrameRef.current = requestAnimationFrame(updateLevels);
-  }, [isRecording]);
-
-  // Clean up animation frame
-  useEffect(() => {
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, []);
-
-  // Check browser support
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setBrowserSupport(checkBrowserSupport());
-    }
-  }, []);
-
-  /**
-   * Starts recording from both microphone and system audio
-   */
+  // Start recording
   const startRecording = useCallback(async () => {
     try {
       sessionIdRef.current = createSessionId();
@@ -126,11 +63,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         } 
       });
       setMicrophoneStream(micStream);
-      setupAudioAnalysis(micStream, false);
 
-      // Request system audio access (we need video:true for browser to show screen selection dialog, but we'll discard the video)
+      // Request system audio access
       const sysStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true, // Required to show dialog, but we'll remove the video track
+        video: true,
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
@@ -140,19 +76,18 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         },
       });
       
-      // Remove video tracks - we only want audio
+      // Remove video tracks
       sysStream.getVideoTracks().forEach(track => track.stop());
       
-      // Create audio-only stream with the system audio
+      // Create audio-only stream
       const systemAudioStream = new MediaStream();
       sysStream.getAudioTracks().forEach(track => systemAudioStream.addTrack(track));
       setSystemStream(systemAudioStream);
-      setupAudioAnalysis(systemAudioStream, true);
 
-      // Set up microphone recorder with high quality options
+      // Set up recorders
       const microphoneRecorder = new MediaRecorder(micStream, {
         mimeType: 'audio/webm;codecs=pcm',
-        audioBitsPerSecond: 256000 // 256 kbps for high quality
+        audioBitsPerSecond: 256000
       });
       microphoneRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -160,10 +95,9 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         }
       };
 
-      // Set up system audio recorder with high quality options
       const systemRecorder = new MediaRecorder(systemAudioStream, {
         mimeType: 'audio/webm;codecs=pcm',
-        audioBitsPerSecond: 256000 // 256 kbps for high quality
+        audioBitsPerSecond: 256000
       });
       systemRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -176,10 +110,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       systemRecorder.start(1000);
       startTimeRef.current = Date.now();
       setIsRecording(true);
-
-      // Start visualization
-      updateLevels();
-
+      
       if (onRecordingStart) {
         onRecordingStart();
       }
@@ -187,7 +118,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       toast.success("Recording started");
     } catch (error) {
       console.error('Error starting recording:', error);
-      // Check error type and provide more specific messages
       let errorMessage = 'Failed to start recording. Please ensure you have granted the necessary permissions.';
       
       if (error instanceof DOMException) {
@@ -206,26 +136,18 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       
       toast.error(errorMessage);
     }
-  }, [setupAudioAnalysis, updateLevels, onRecordingStart]);
+  }, [onRecordingStart]);
 
-  /**
-   * Stops recording and processes the recorded audio
-   */
+  // Stop recording
   const stopRecording = useCallback(async () => {
     try {
       if (!startTimeRef.current) {
         throw new Error('Invalid recording state');
       }
 
-      // Update UI state immediately
       setIsRecording(false);
       setIsProcessing(true);
       toast.info("Processing audio recording...");
-
-      // Stop visualization
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
 
       // Stop streams
       microphoneStream?.getTracks().forEach(track => track.stop());
@@ -235,20 +157,15 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       const timestamp = getFormattedDateTime();
       const sessionId = sessionIdRef.current;
       
-      // Use raw audio data for best quality conversion
       const microphoneBlob = new Blob(microphoneChunksRef.current);
       const systemBlob = new Blob(systemChunksRef.current);
       
-      // Convert to high-quality WAV before saving
-      const mimeType = 'audio/wav';
       const microphoneWavBlob = await convertToHighQualityWav(microphoneBlob);
       const systemWavBlob = await convertToHighQualityWav(systemBlob);
 
-      // Generate filenames
+      // Save recordings
       const microphoneFilename = `microphone_${timestamp}_${sessionId}.wav`;
       const systemFilename = `system_${timestamp}_${sessionId}.wav`;
-
-      // Save recordings
       const microphoneUrl = await saveAudioFile(microphoneWavBlob, microphoneFilename);
       const systemUrl = await saveAudioFile(systemWavBlob, systemFilename);
 
@@ -270,8 +187,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       setSystemStream(null);
       startTimeRef.current = null;
       setDuration(0);
-      setMicrophoneLevel(0);
-      setSystemLevel(0);
 
       // Create result
       const recordings: RecordedAudio = {
@@ -282,7 +197,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         format: 'wav'
       };
 
-      // Call callback
       if (onRecordingStop) {
         onRecordingStop(recordings);
       }
@@ -299,14 +213,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       setSystemStream(null);
       startTimeRef.current = null;
       setDuration(0);
-      setMicrophoneLevel(0);
-      setSystemLevel(0);
     }
   }, [microphoneStream, systemStream, onRecordingStop]);
 
-  /**
-   * Toggle recording state
-   */
+  // Toggle recording
   const toggleRecording = useCallback(() => {
     if (isRecording) {
       stopRecording();
@@ -335,6 +245,13 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     };
   }, [isRecording]);
 
+  // Check browser support
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setBrowserSupport(checkBrowserSupport());
+    }
+  }, []);
+
   // Format duration as MM:SS
   const formatDuration = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -358,64 +275,73 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   }
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      <div className="flex flex-col space-y-4">
-        <div className="relative w-full h-[50px] bg-gray-50 rounded-lg overflow-hidden">
-          <div
-            className="absolute inset-0 bg-blue-500 opacity-50 transition-transform duration-75 origin-left"
-            style={{ transform: `scaleX(${microphoneLevel})` }}
-          />
-          <div className="absolute inset-0 flex items-center px-4">
-            <span className="text-sm font-medium">Microphone Level</span>
+    <div className={`${className}`}>
+      <div className="relative flex flex-col items-center justify-center p-12 overflow-hidden rounded-2xl bg-gradient-to-b from-background to-secondary/10">
+        {/* Ambient Glow Effect */}
+        <div 
+          className={`absolute inset-0 blur-3xl transition-opacity duration-1000 ${
+            isRecording ? 'opacity-20' : 'opacity-0'
+          }`}
+          style={{
+            background: isRecording 
+              ? 'radial-gradient(circle at center, rgb(239, 68, 68), transparent 70%)'
+              : 'radial-gradient(circle at center, rgb(59, 130, 246), transparent 70%)'
+          }}
+        />
+
+        {/* Main Recording Button */}
+        <div className="relative mb-8">
+          <Button
+            onClick={toggleRecording}
+            variant={isRecording ? "destructive" : "default"}
+            size="lg"
+            className={`
+              h-24 w-24 rounded-full p-0 relative
+              shadow-lg hover:shadow-xl transition-all duration-500
+              ${isRecording ? 'animate-pulse shadow-red-500/20' : ''}
+              ${isProcessing ? 'animate-pulse shadow-blue-500/20' : ''}
+            `}
+            disabled={isProcessing}
+          >
+            <div className={`
+              absolute inset-0 rounded-full opacity-20 transition-all duration-500
+              ${isRecording 
+                ? 'bg-gradient-to-tr from-red-500 to-red-500/80' 
+                : 'bg-gradient-to-tr from-primary to-primary/80'
+              }
+            `} />
+            <Image
+              src={isProcessing ? "/globe.svg" : "/microphone.svg"}
+              width={32}
+              height={32}
+              alt={isProcessing ? "Processing" : "Microphone"}
+              className={`transition-transform duration-500 ${isRecording ? 'scale-90' : 'scale-100'}`}
+            />
+          </Button>
+
+          {/* Recording Status */}
+          <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 whitespace-nowrap">
+            {isRecording ? (
+              <div className="flex items-center gap-3 bg-destructive/10 px-4 py-2 rounded-full">
+                <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                <span className="font-mono text-base font-medium text-destructive">
+                  {formatDuration(duration)}
+                </span>
+              </div>
+            ) : isProcessing ? (
+              <div className="flex items-center gap-3 bg-primary/10 px-4 py-2 rounded-full">
+                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <span className="font-mono text-base font-medium text-primary">
+                  Processing...
+                </span>
+              </div>
+            ) : (
+              <span className="text-sm font-medium text-muted-foreground">
+                Click to start recording
+              </span>
+            )}
           </div>
         </div>
-
-        <div className="relative w-full h-[50px] bg-gray-50 rounded-lg overflow-hidden">
-          <div
-            className="absolute inset-0 bg-green-500 opacity-50 transition-transform duration-75 origin-left"
-            style={{ transform: `scaleX(${systemLevel})` }}
-          />
-          <div className="absolute inset-0 flex items-center px-4">
-            <span className="text-sm font-medium">System Audio Level</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-between items-center">
-        <Button
-          onClick={toggleRecording}
-          variant={isRecording ? "destructive" : isProcessing ? "outline" : "default"}
-          className={`gap-2 ${isRecording || isProcessing ? 'animate-pulse' : ''}`}
-          size="lg"
-          disabled={isProcessing}
-        >
-          <Image
-            src={isProcessing ? "/globe.svg" : "/microphone.svg"}
-            width={24}
-            height={24}
-            alt={isProcessing ? "Processing" : "Microphone"}
-            className={`${isRecording || isProcessing ? 'animate-pulse' : ''}`}
-          />
-          <span>
-            {isRecording ? 'Stop Recording' : 
-             isProcessing ? 'Processing...' : 
-             'Start Recording'}
-          </span>
-        </Button>
-
-        {isRecording && (
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-            <span className="font-mono text-lg">{formatDuration(duration)}</span>
-          </div>
-        )}
-        
-        {isProcessing && (
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
-            <span className="font-mono text-lg">Processing audio...</span>
-          </div>
-        )}
       </div>
     </div>
   );
