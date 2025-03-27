@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import Image from 'next/image';
 import {
   Select,
   SelectContent,
@@ -94,91 +96,143 @@ export const DeviceSelector: React.FC<DeviceSelectorProps> = ({
   }, [onDeviceChange]);
 
   return (
-    <div className={`flex flex-col space-y-4 ${className}`}>
-      <div className="flex flex-col space-y-2">
-        <div className="flex justify-between items-center">
-          <label className="text-sm font-medium text-muted-foreground">
-            Microphone Input
-          </label>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            type="button"
-            className="h-7 px-2 text-xs relative"
-            onClick={handleRefresh}
-            disabled={disabled || isLoading}
-          >
-            {isLoading ? (
-              <>
-                <div className="w-3 h-3 rounded-full border-2 border-r-transparent animate-spin absolute left-2" />
-                <span className="ml-5">Refreshing...</span>
-              </>
-            ) : (
-              'Refresh Devices'
-            )}
-          </Button>
+    <Collapsible className={`w-full ${className}`}>
+      <div className="relative backdrop-blur-sm bg-background/95 rounded-lg border shadow-lg p-4 transition-all duration-300 hover:shadow-xl">
+        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2">
+          <div className="bg-background rounded-full p-2 border shadow-md">
+            <Image
+              src="/microphone.svg"
+              width={24}
+              height={24}
+              alt="Microphone"
+              className="opacity-70"
+            />
+          </div>
         </div>
         
-        <div className="relative w-full">
-          <Select
-            value={selectedDeviceId}
-            onValueChange={handleDeviceChange}
-            disabled={disabled || isLoading}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a microphone">
+        <CollapsibleTrigger asChild>
+          <div className="flex items-center justify-between cursor-pointer pt-2">
+            <div className="flex flex-col">
+              <label className="text-sm font-medium">
+                Microphone Input
+              </label>
+              <span className="text-xs text-muted-foreground">
                 {audioDevices.find(d => d.id === selectedDeviceId)?.label || 'Default Microphone'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              className="w-[var(--radix-select-trigger-width)] min-w-[300px]"
-              align="start"
-              sideOffset={4}
+              </span>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              type="button"
+              className={`h-8 relative transition-all duration-300 ${isLoading ? 'w-28' : 'w-24'}`}
+              onClick={handleRefresh}
+              disabled={disabled || isLoading}
             >
-              <SelectGroup>
-                {defaultDevice && (
-                  <>
-                    <SelectLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-                      Default Device
-                    </SelectLabel>
-                    <SelectItem 
-                      key={defaultDevice.id} 
-                      value={defaultDevice.id}
-                      className="py-2"
-                    >
-                      {defaultDevice.label}
-                    </SelectItem>
-                  </>
-                )}
-                
-                {otherDevices.length > 0 && (
-                  <>
-                    <SelectLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5 mt-2">
-                      Other Devices
-                    </SelectLabel>
-                    {otherDevices.map((device) => (
+              {isLoading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 rounded-full border-2 border-primary border-r-transparent animate-spin" />
+                  <span className="text-xs">Refreshing</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="transition-transform duration-300 ease-in-out hover:rotate-180"
+                  >
+                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38" />
+                  </svg>
+                  <span className="text-xs">Refresh</span>
+                </div>
+              )}
+            </Button>
+          </div>
+        </CollapsibleTrigger>
+        
+        <CollapsibleContent className="mt-4">
+          <div className="relative w-full">
+            <Select
+              value={selectedDeviceId}
+              onValueChange={handleDeviceChange}
+              disabled={disabled || isLoading}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a microphone">
+                  {audioDevices.find(d => d.id === selectedDeviceId)?.label || 'Default Microphone'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                className="w-[var(--radix-select-trigger-width)] min-w-[300px]"
+                align="start"
+                sideOffset={4}
+              >
+                <SelectGroup>
+                  {defaultDevice && (
+                    <>
+                      <SelectLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+                        Default Device
+                      </SelectLabel>
                       <SelectItem 
-                        key={device.id} 
-                        value={device.id}
+                        key={defaultDevice.id} 
+                        value={defaultDevice.id}
                         className="py-2"
                       >
-                        {device.label}
+                        {defaultDevice.label}
                       </SelectItem>
-                    ))}
-                  </>
-                )}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        {audioDevices.length <= 1 && (
-          <p className="text-xs text-amber-500 mt-1">
-            Limited devices detected. Grant microphone permission and click "Refresh Devices".
-          </p>
-        )}
+                    </>
+                  )}
+                  
+                  {otherDevices.length > 0 && (
+                    <>
+                      <SelectLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5 mt-2">
+                        Other Devices
+                      </SelectLabel>
+                      {otherDevices.map((device) => (
+                        <SelectItem 
+                          key={device.id} 
+                          value={device.id}
+                          className="py-2"
+                        >
+                          {device.label}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+
+            {audioDevices.length <= 1 && (
+              <p className="text-xs text-amber-500/90 bg-amber-50/30 rounded-md p-3 mt-4 flex items-center space-x-2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-amber-500"
+                >
+                  <path d="M12 9v4M12 17h.01" />
+                  <circle cx="12" cy="12" r="10" />
+                </svg>
+                <span>Limited devices detected. Grant microphone permission and refresh.</span>
+              </p>
+            )}
+          </div>
+        </CollapsibleContent>
       </div>
-    </div>
+    </Collapsible>
   );
 };

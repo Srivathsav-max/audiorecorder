@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AudioRecorderProps, RecordedAudio, AudioDevice } from './types';
 import { DeviceSelector } from './DeviceSelector';
+import { WaveformVisualizer } from './WaveformVisualizer';
 import {
   saveAudioFile,
   getFormattedDateTime,
@@ -386,130 +387,114 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   // Display browser compatibility warning if needed
   if (!browserSupport.supported) {
     return (
-      <div className="p-4 text-red-800 bg-red-50 rounded-lg">
-        <p className="mb-2">Your browser doesn't support all features required for audio recording:</p>
-        <ul className="list-disc pl-5 space-y-1">
+      <div className="p-4 text-red-800 bg-red-50 rounded-lg shadow-sm">
+        <p className="font-medium mb-2">Your browser doesn't support audio recording</p>
+        <ul className="list-disc pl-5 space-y-1 text-sm">
           <li>MediaRecorder API: {browserSupport.mediaRecorderSupported ? '✓' : '✗'}</li>
           <li>Microphone Access: {browserSupport.microphoneSupported ? '✓' : '✗'}</li>
           <li>Screen Capture: {browserSupport.screenCaptureSupported ? '✓' : '✗'}</li>
         </ul>
-        <p className="mt-2">Please try using a modern browser like Chrome, Edge, or Firefox.</p>
+        <p className="mt-2 text-sm">Please use Chrome, Edge, or Firefox for best results.</p>
       </div>
     );
   }
 
   return (
     <div className={`${className}`}>
-      <div className="relative flex flex-col items-center justify-center p-12 overflow-hidden rounded-2xl bg-gradient-to-b from-background to-secondary/5">
-        {/* Wave Animation Container */}
-        <div className="absolute inset-0 overflow-hidden">
-          {/* Multiple wave layers for depth */}
-          <div className={`absolute inset-0 transition-opacity duration-500 ${isRecording ? 'opacity-100' : 'opacity-0'}`}>
-            {/* Wave 1 - Slow */}
-            <div className="absolute inset-0 animate-wave-slow">
-              <div className="absolute inset-x-0 top-1/2 h-[500px] rounded-full bg-destructive/5 blur-3xl transform -translate-y-1/2" />
-            </div>
-            {/* Wave 2 - Medium */}
-            <div className="absolute inset-0 animate-wave-medium">
-              <div className="absolute inset-x-0 top-1/2 h-[400px] rounded-full bg-destructive/5 blur-2xl transform -translate-y-1/2" />
-            </div>
-            {/* Wave 3 - Fast */}
-            <div className="absolute inset-0 animate-wave-fast">
-              <div className="absolute inset-x-0 top-1/2 h-[300px] rounded-full bg-destructive/5 blur-xl transform -translate-y-1/2" />
-            </div>
+      <div className="bg-background rounded-xl shadow-sm border border-border/40 overflow-hidden">
+        {/* Card Header */}
+        <div className="p-4 border-b border-border/30">
+          <h3 className="text-lg font-medium">Audio Recorder</h3>
+          <p className="text-sm text-muted-foreground">Record both microphone and system audio</p>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="p-6">
+          {/* Device Selection */}
+          <div className="mb-6">
+            <DeviceSelector
+              audioDevices={audioDevices}
+              selectedDeviceId={selectedMicrophoneId}
+              onDeviceChange={handleMicrophoneChange}
+              onRefreshDevices={fetchAudioDevices}
+              disabled={isRecording || isProcessing}
+            />
           </div>
-        </div>
 
-        {/* Device Selection */}
-        <div className="w-full mb-6">
-          <DeviceSelector
-            audioDevices={audioDevices}
-            selectedDeviceId={selectedMicrophoneId}
-            onDeviceChange={handleMicrophoneChange}
-            onRefreshDevices={fetchAudioDevices}
-            disabled={isRecording || isProcessing}
-          />
-        </div>
-
-        {/* Main Recording Button */}
-        <div className="relative mb-8 flex flex-col items-center gap-6">
-          {/* Recording Status Display */}
-          <div className="text-center mb-2">
-            {isRecording ? (
-              <div className="flex items-center gap-3 bg-destructive/10 px-6 py-3 rounded-full">
-                <div className="w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" />
-                <span className="font-mono text-lg font-medium text-destructive tracking-wider">
+          {/* Recording Status */}
+          <div className="flex justify-center mb-8">
+            {isRecording && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-destructive/10 rounded-full">
+                <div className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
+                <span className="font-mono text-sm font-medium text-destructive">
                   {formatDuration(duration)}
                 </span>
               </div>
-            ) : isProcessing ? (
-              <div className="flex items-center gap-3 bg-primary/10 px-6 py-3 rounded-full">
-                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
-                <span className="font-mono text-lg font-medium text-primary">
-                  Processing...
-                </span>
+            )}
+            
+            {isProcessing && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0s' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                </div>
+                <span className="font-mono text-sm font-medium text-primary">Processing</span>
               </div>
-            ) : (
-              <span className="text-sm font-medium text-muted-foreground/80">
-                Ready to record
-              </span>
+            )}
+            
+            {!isRecording && !isProcessing && (
+              <div className="px-4 py-2 bg-muted/50 rounded-full">
+                <span className="text-sm text-muted-foreground">Ready to record</span>
+              </div>
             )}
           </div>
 
-          <div className="relative">
-            {/* Radiant background effect */}
-            <div className={`
-              absolute -inset-4 rounded-full
-              bg-gradient-to-r transition-opacity duration-500
-              ${isRecording 
-                ? 'from-destructive/20 to-destructive/10 animate-radiant-glow' 
-                : 'from-primary/20 to-primary/10 opacity-0'
-              }
-              blur-xl
-            `} />
-            
+          {/* Record Button */}
+          <div className="flex justify-center">
             <Button
               onClick={toggleRecording}
               variant={isRecording ? "destructive" : "default"}
               size="lg"
               className={`
-                group
-                h-32 w-32 rounded-full p-0 relative
-                shadow-lg hover:shadow-2xl
-                transform transition-all duration-500 ease-out
-                hover:scale-105 active:scale-95
-                ${isProcessing ? 'animate-pulse shadow-blue-500/30' : ''}
-                bg-background
+                h-24 w-24 rounded-full p-0
+                relative transition-all duration-300
+                ${isRecording ? 'bg-destructive hover:bg-destructive/90' : 'bg-primary hover:bg-primary/90'}
+                ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}
+                shadow-md hover:shadow-lg
               `}
               disabled={isProcessing}
             >
-              {/* Inner gradient */}
-              <div className={`
-                absolute inset-0 rounded-full opacity-20
-                bg-gradient-to-br transition-all duration-500
-                group-hover:opacity-30
-                ${isRecording
-                  ? 'from-destructive via-destructive/80 to-destructive/60'
-                  : 'from-primary/90 via-primary/80 to-primary/60'}
-              `} />
-              
-              <div className="relative z-10 flex flex-col items-center gap-2">
-                <Image
-                  src={isProcessing ? "/globe.svg" : "/microphone.svg"}
-                  width={40}
-                  height={40}
-                  alt={isProcessing ? "Processing" : "Microphone"}
-                  className={`
-                    transition-all duration-500 ease-out
-                    ${isRecording ? 'scale-90 animate-pulse' : 'scale-100'}
-                    group-hover:transform group-hover:scale-110
-                  `}
-                />
-                <span className="text-xs font-medium opacity-80">
+              <div className="flex flex-col items-center justify-center">
+                {isRecording ? (
+                  <div className="w-8 h-8 rounded bg-white" />
+                ) : (
+                  <div className="relative">
+                    <Image 
+                      src="/microphone.svg" 
+                      width={28} 
+                      height={28} 
+                      alt="Microphone"
+                      className="text-background"
+                    />
+                  </div>
+                )}
+                <span className="text-xs mt-1 text-background font-medium">
                   {isRecording ? 'Stop' : 'Record'}
                 </span>
               </div>
             </Button>
+          </div>
+          
+          {/* Live Waveform Visualization */}
+          <div className="mt-8 pt-6 border-t border-border/30">
+            <WaveformVisualizer
+              isRecording={isRecording}
+              isProcessing={isProcessing}
+              deviceId={selectedMicrophoneId}
+              microphoneStream={microphoneStream}
+              systemStream={systemStream}
+            />
           </div>
         </div>
       </div>
