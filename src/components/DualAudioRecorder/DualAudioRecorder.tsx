@@ -4,14 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { AudioRecorder } from '../AudioRecorder';
 import { RecordingList } from '../RecordingList';
 import { RecordedAudio } from '../AudioRecorder/types';
+import { Card, CardContent } from '@/components/ui/card';
+import Image from 'next/image';
 
 interface DualAudioRecorderProps {
-  /**
-   * Default audio format
-   * @default 'mp3'
-   */
-  defaultFormat?: 'mp3' | 'wav';
-  
   /**
    * Custom class name for the component
    */
@@ -22,13 +18,11 @@ interface DualAudioRecorderProps {
  * Main container component for the dual audio recording system
  */
 export const DualAudioRecorder: React.FC<DualAudioRecorderProps> = ({
-  defaultFormat = 'mp3',
   className = '',
 }) => {
   // State to store recordings
   const [recordings, setRecordings] = useState<RecordedAudio[]>([]);
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingFormat, setRecordingFormat] = useState<'mp3' | 'wav'>(defaultFormat);
   
   // Load saved recordings from localStorage on component mount
   useEffect(() => {
@@ -68,129 +62,40 @@ export const DualAudioRecorder: React.FC<DualAudioRecorderProps> = ({
   };
   
   return (
-    <div className={`dual-audio-recorder ${className}`}>
-      <div className="recorder-header">
-        <h1>Nurse-Patient Call Recording</h1>
-        <p className="description">
-          Record both microphone and system audio for nurse-patient calls.
-          The recordings will be saved for government record purposes.
+    <div className={`max-w-3xl mx-auto p-5 sm:p-8 ${className}`}>
+      <div className="flex justify-center mb-8">
+        <Image
+          src="/watchrx-logo-new.png"
+          alt="WatchRX Logo"
+          width={200}
+          height={60}
+          className="mb-6"
+          priority
+        />
+      </div>
+      <div className="text-center mb-8">
+        <h1 className="text-2xl font-bold mb-3">Healthcare Communication Recorder</h1>
+        <p className="text-gray-600 text-base leading-relaxed">
+          Enterprise-grade dual audio capture system designed for healthcare professionals. 
+          Securely records and archives communication sessions with integrated system and microphone audio.
         </p>
       </div>
       
-      <div className="recorder-section">
-        <AudioRecorder 
-          onRecordingStart={handleRecordingStart}
-          onRecordingStop={handleRecordingStop}
-          format={recordingFormat}
-        />
-      </div>
+      <Card className="mb-8">
+        <CardContent className="p-6">
+          <AudioRecorder 
+            onRecordingStart={handleRecordingStart}
+            onRecordingStop={handleRecordingStop}
+          />
+        </CardContent>
+      </Card>
       
-      <div className="format-settings">
-        <h2>Recording Settings</h2>
-        <div className="format-selector">
-          <label htmlFor="format-setting">Default Format:</label>
-          <select 
-            id="format-setting"
-            value={recordingFormat}
-            onChange={(e) => setRecordingFormat(e.target.value as 'mp3' | 'wav')}
-            disabled={isRecording}
-          >
-            <option value="mp3">MP3</option>
-            <option value="wav">WAV</option>
-          </select>
-        </div>
-        <div className="format-info">
-          <p>MP3: Smaller file size, good for archiving</p>
-          <p>WAV: Higher quality, uncompressed audio</p>
-        </div>
-      </div>
-      
-      <div className="recordings-section">
+      <div className="mt-8">
         <RecordingList 
           recordings={recordings}
           onRemoveRecording={handleRemoveRecording}
         />
       </div>
-      
-      <style jsx>{`
-        .dual-audio-recorder {
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 20px;
-        }
-        
-        .recorder-header {
-          margin-bottom: 30px;
-          text-align: center;
-        }
-        
-        .recorder-header h1 {
-          font-size: 24px;
-          margin-bottom: 10px;
-        }
-        
-        .description {
-          color: #666;
-          font-size: 16px;
-          line-height: 1.4;
-        }
-        
-        .recorder-section {
-          margin-bottom: 30px;
-        }
-        
-        .format-settings {
-          background-color: #f5f5f5;
-          border-radius: 8px;
-          padding: 20px;
-          margin-bottom: 30px;
-        }
-        
-        .format-settings h2 {
-          font-size: 18px;
-          margin-bottom: 15px;
-        }
-        
-        .format-selector {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 15px;
-        }
-        
-        .format-selector select {
-          padding: 8px;
-          border-radius: 4px;
-          border: 1px solid #ddd;
-        }
-        
-        .format-info {
-          color: #666;
-          font-size: 14px;
-        }
-        
-        .format-info p {
-          margin: 5px 0;
-        }
-        
-        .recordings-section {
-          margin-top: 30px;
-        }
-        
-        @media (max-width: 600px) {
-          .dual-audio-recorder {
-            padding: 15px;
-          }
-          
-          .recorder-header h1 {
-            font-size: 20px;
-          }
-          
-          .format-settings {
-            padding: 15px;
-          }
-        }
-      `}</style>
     </div>
   );
 };

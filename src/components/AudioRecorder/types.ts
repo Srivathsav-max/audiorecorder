@@ -1,61 +1,35 @@
+export interface RecordedAudio {
+  microphoneAudio: string;
+  systemAudio: string;
+  combinedAudio: string | null;
+  timestamp: number;
+  format: 'wav';
+}
+
 export interface AudioRecorderProps {
   /**
-   * Callback function triggered when recording starts
+   * Callback function when recording starts
    */
   onRecordingStart?: () => void;
   
   /**
-   * Callback function triggered when recording stops
+   * Callback function when recording stops, provides recorded audio data
    */
   onRecordingStop?: (recordings: RecordedAudio) => void;
   
   /**
-   * The format to save the audio in
-   * @default 'mp3'
-   */
-  format?: 'mp3' | 'wav';
-  
-  /**
-   * Custom class name for the component
+   * Custom class name for styling
    */
   className?: string;
 }
 
-export interface RecordedAudio {
-  /**
-   * Microphone audio blob URL
-   */
-  microphoneAudio: string | null;
-  
-  /**
-   * System audio blob URL
-   */
-  systemAudio: string | null;
-  
-  /**
-   * Combined audio blob URL (if available)
-   */
-  combinedAudio?: string | null;
-  
-  /**
-   * Timestamp when the recording started
-   */
-  timestamp: number;
-  
-  /**
-   * Format of the audio file
-   */
-  format: 'mp3' | 'wav';
+export interface AudioLevels {
+  microphone: number;
+  system: number;
 }
 
-export interface RecordingState {
-  isRecording: boolean;
-  microphoneStream: MediaStream | null;
-  systemStream: MediaStream | null;
-  microphoneRecorder: MediaRecorder | null;
-  systemRecorder: MediaRecorder | null;
-  microphoneChunks: Blob[];
-  systemChunks: Blob[];
-  startTime: number | null;
-  format: 'mp3' | 'wav';
+export interface AudioAnalyzer {
+  context: AudioContext;
+  analyser: AnalyserNode;
+  dataArray: Uint8Array;
 }

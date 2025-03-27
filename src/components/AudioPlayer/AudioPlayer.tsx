@@ -1,252 +1,159 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import WaveSurfer from 'wavesurfer.js/dist/wavesurfer.js';
+import { Play, Pause, Download } from "lucide-react";
 
 interface AudioPlayerProps {
-  /**
-   * URL of the audio file to play
-   */
   src: string;
-  
-  /**
-   * Label for the audio player
-   */
   label: string;
-  
-  /**
-   * Custom class name for the component
-   */
   className?: string;
 }
 
-/**
- * AudioPlayer component for playing recorded audio
- */
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   src,
   label,
   className = '',
 }) => {
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const waveformRef = useRef<HTMLDivElement>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
-  // Handle audio metadata loaded
-  const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration);
+  useEffect(() => {
+    if (!waveformRef.current) return;
+
+    const wavesurfer = WaveSurfer.create({
+      container: waveformRef.current,
+      waveColor: '#94a3b8',
+      progressColor: '#4a90e2',
+      cursorWidth: 2,
+      cursorColor: '#2d3748',
+      height: 64,
+      normalize: true,
+      fillParent: true,
+      autoCenter: true,
+      minPxPerSec: 50,
+      backend: 'WebAudio',
+    });
+
+    wavesurferRef.current = wavesurfer;
+
+    wavesurfer.on('ready', () => {
       setIsLoading(false);
-    }
-  };
+      setIsReady(true);
+      toast.success('Audio loaded successfully');
+    });
 
-  // Handle audio error
-  const handleError = () => {
-    setError('Failed to load audio file');
-    setIsLoading(false);
-  };
+    wavesurfer.on('play', () => setIsPlaying(true));
+    wavesurfer.on('pause', () => setIsPlaying(false));
+    wavesurfer.on('timeupdate', time => setCurrentTime(time));
+    wavesurfer.on('finish', () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    });
 
-  // Handle play/pause toggle
+    wavesurfer.on('error', err => {
+      console.error('WaveSurfer error:', err);
+      setError('Failed to load audio file');
+      setIsLoading(false);
+      toast.error('Failed to load audio file');
+    });
+
+    // Load the audio
+    wavesurfer.load(src);
+
+    return () => {
+      wavesurfer.destroy();
+    };
+  }, [src]);
+
   const togglePlayPause = () => {
-    if (audioRef.current) {
+    if (wavesurferRef.current) {
       if (isPlaying) {
-        audioRef.current.pause();
+        wavesurferRef.current.pause();
       } else {
-        audioRef.current.play();
+        wavesurferRef.current.play();
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
-  // Handle time update
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  };
-
-  // Handle seeking
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const seekTime = parseFloat(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = seekTime;
-      setCurrentTime(seekTime);
-    }
-  };
-
-  // Format time as MM:SS
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  // Update play state when audio ends
-  const handleAudioEnded = () => {
-    setIsPlaying(false);
-    if (audioRef.current) {
-      setCurrentTime(0);
-    }
-  };
-
-  // Download audio file
   const handleDownload = () => {
     const link = document.createElement('a');
     link.href = src;
-    link.download = label.replace(/\s+/g, '_').toLowerCase() + '.mp3';
+    link.download = label.replace(/\s+/g, '_').toLowerCase() + '.wav';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    toast.success('Download started');
   };
 
   return (
-    <div className={`audio-player ${className}`}>
-      <div className="audio-player-header">
-        <h3 className="audio-player-label">{label}</h3>
-        <button 
-          className="download-button"
-          onClick={handleDownload}
-          aria-label="Download audio"
-        >
-          Download
-        </button>
-      </div>
-      
-      {isLoading ? (
-        <div className="loading-indicator">Loading audio...</div>
-      ) : error ? (
-        <div className="error-message">{error}</div>
-      ) : (
-        <div className="audio-player-controls">
-          <button 
-            onClick={togglePlayPause}
-            className="play-pause-button"
-            aria-label={isPlaying ? 'Pause' : 'Play'}
+    <Card className={`mb-4 ${className}`}>
+      <CardHeader className="py-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-medium">{label}</CardTitle>
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={handleDownload}
+            className="gap-2"
+            disabled={!isReady}
           >
-            {isPlaying ? '❚❚' : '▶'}
-          </button>
-          
-          <div className="time-display current-time">{formatTime(currentTime)}</div>
-          
-          <input 
-            type="range"
-            className="seek-slider"
-            min={0}
-            max={duration}
-            value={currentTime}
-            step={0.1}
-            onChange={handleSeek}
-          />
-          
-          <div className="time-display duration">{formatTime(duration)}</div>
+            <Download className="h-4 w-4" />
+            Download
+          </Button>
         </div>
-      )}
+      </CardHeader>
       
-      <audio
-        ref={audioRef}
-        src={src}
-        onLoadedMetadata={handleLoadedMetadata}
-        onTimeUpdate={handleTimeUpdate}
-        onEnded={handleAudioEnded}
-        onError={handleError}
-        preload="metadata"
-      />
-      
-      <style jsx>{`
-        .audio-player {
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          padding: 15px;
-          background-color: #f9f9f9;
-          margin-bottom: 15px;
-        }
-        
-        .audio-player-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 10px;
-        }
-        
-        .audio-player-label {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 500;
-        }
-        
-        .download-button {
-          background-color: #4a90e2;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          padding: 5px 10px;
-          font-size: 12px;
-          cursor: pointer;
-        }
-        
-        .download-button:hover {
-          background-color: #3b7dce;
-        }
-        
-        .audio-player-controls {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        
-        .play-pause-button {
-          background-color: #4a90e2;
-          color: white;
-          border: none;
-          border-radius: 50%;
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          font-size: 16px;
-        }
-        
-        .play-pause-button:hover {
-          background-color: #3b7dce;
-        }
-        
-        .seek-slider {
-          flex: 1;
-          height: 5px;
-        }
-        
-        .time-display {
-          font-family: monospace;
-          font-size: 14px;
-          min-width: 45px;
-        }
-        
-        .current-time {
-          text-align: right;
-        }
-        
-        .duration {
-          text-align: left;
-        }
-        
-        .loading-indicator {
-          padding: 10px;
-          text-align: center;
-          color: #666;
-        }
-        
-        .error-message {
-          padding: 10px;
-          text-align: center;
-          color: #cc0000;
-          background-color: #fff5f5;
-          border-radius: 4px;
-        }
-      `}</style>
-    </div>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-4">
+            <div className="h-16 bg-gray-100 rounded-lg animate-pulse" />
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 bg-gray-100 rounded-full animate-pulse" />
+              <div className="w-16 h-6 bg-gray-100 rounded animate-pulse" />
+            </div>
+            <div className="text-center text-gray-600 py-2">
+              Preparing waveform visualization...
+            </div>
+          </div>
+        ) : error ? (
+          <div className="text-center text-red-600 bg-red-50 py-2 rounded-md">{error}</div>
+        ) : (
+          <div className="space-y-4">
+            <div ref={waveformRef} className="w-full rounded-lg overflow-hidden" />
+            
+            <div className="flex items-center justify-between">
+              <Button 
+                onClick={togglePlayPause}
+                variant="secondary"
+                size="icon"
+                className="w-10 h-10 rounded-full"
+                disabled={!isReady || !!error}
+              >
+                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+              </Button>
+              
+              <span className="font-mono text-sm">
+                {formatTime(currentTime)}
+              </span>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };

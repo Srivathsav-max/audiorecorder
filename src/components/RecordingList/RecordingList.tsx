@@ -1,6 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { AudioPlayer } from '../AudioPlayer';
 import { RecordedAudio } from '../AudioRecorder/types';
 
@@ -56,170 +65,84 @@ export const RecordingList: React.FC<RecordingListProps> = ({
   };
 
   return (
-    <div className={`recording-list ${className}`}>
-      <h2 className="recording-list-title">Recorded Sessions</h2>
+    <div className={`space-y-4 mt-8 ${className}`}>
+      <h2 className="text-xl font-semibold mb-4">Recorded Sessions</h2>
       
       {recordings.length === 0 ? (
-        <div className="no-recordings">
-          No recordings available. Start recording to see your sessions here.
-        </div>
+        <Card>
+          <CardContent className="p-6 text-center text-gray-500">
+            No recordings available. Start recording to see your sessions here.
+          </CardContent>
+        </Card>
       ) : (
-        <div className="recordings-container">
+        <div className="space-y-4">
           {recordings.map((recording, index) => (
-            <div key={`${recording.timestamp}-${index}`} className="recording-item">
-              <div 
-                className="recording-header"
-                onClick={() => toggleExpand(index)}
-              >
-                <div className="recording-info">
-                  <span className="recording-timestamp">
-                    {formatTimestamp(recording.timestamp)}
-                  </span>
-                  <span className="recording-format">
-                    {recording.format.toUpperCase()}
-                  </span>
-                </div>
+            <Card key={`${recording.timestamp}-${index}`}>
+              <Collapsible>
+                <CollapsibleTrigger className="w-full">
+                  <CardHeader className="p-4 flex flex-row items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="text-left">
+                        <CardTitle className="text-sm font-medium">
+                          {formatTimestamp(recording.timestamp)}
+                        </CardTitle>
+                      </div>
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary">
+                        {recording.format.toUpperCase()}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="h-8 px-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemove(index, e);
+                          toast.success("Recording removed successfully");
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      {expandedIndices.includes(index) ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
                 
-                <div className="recording-actions">
-                  <button
-                    className="remove-button"
-                    onClick={(e) => handleRemove(index, e)}
-                    aria-label="Remove recording"
-                  >
-                    Remove
-                  </button>
-                  <button
-                    className="expand-button"
-                    aria-label={expandedIndices.includes(index) ? 'Collapse' : 'Expand'}
-                  >
-                    {expandedIndices.includes(index) ? '▲' : '▼'}
-                  </button>
-                </div>
-              </div>
-              
-              {expandedIndices.includes(index) && (
-                <div className="recording-details">
-                  {recording.microphoneAudio && (
-                    <AudioPlayer 
-                      src={recording.microphoneAudio} 
-                      label="Microphone Audio" 
-                    />
-                  )}
-                  
-                  {recording.systemAudio && (
-                    <AudioPlayer 
-                      src={recording.systemAudio} 
-                      label="System Audio" 
-                    />
-                  )}
-                  
-                  {recording.combinedAudio && (
-                    <AudioPlayer 
-                      src={recording.combinedAudio} 
-                      label="Combined Audio" 
-                    />
-                  )}
-                </div>
-              )}
-            </div>
+                <CollapsibleContent>
+                  <CardContent className="pb-4 px-4 pt-0">
+                    {recording.microphoneAudio && (
+                      <AudioPlayer 
+                        src={recording.microphoneAudio} 
+                        label="Microphone Audio" 
+                      />
+                    )}
+                    
+                    {recording.systemAudio && (
+                      <AudioPlayer 
+                        src={recording.systemAudio} 
+                        label="System Audio" 
+                      />
+                    )}
+                    
+                    {recording.combinedAudio && (
+                      <AudioPlayer 
+                        src={recording.combinedAudio} 
+                        label="Combined Audio" 
+                      />
+                    )}
+                  </CardContent>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
           ))}
         </div>
       )}
-      
-      <style jsx>{`
-        .recording-list {
-          margin-top: 30px;
-        }
-        
-        .recording-list-title {
-          font-size: 20px;
-          margin-bottom: 15px;
-        }
-        
-        .no-recordings {
-          padding: 20px;
-          text-align: center;
-          background-color: #f5f5f5;
-          border-radius: 8px;
-          color: #666;
-        }
-        
-        .recordings-container {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-        
-        .recording-item {
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-        
-        .recording-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 15px;
-          background-color: #f5f5f5;
-          cursor: pointer;
-        }
-        
-        .recording-header:hover {
-          background-color: #eaeaea;
-        }
-        
-        .recording-info {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        
-        .recording-timestamp {
-          font-weight: 500;
-        }
-        
-        .recording-format {
-          background-color: #4a90e2;
-          color: white;
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 12px;
-        }
-        
-        .recording-actions {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        
-        .remove-button {
-          background-color: #ff4b4b;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          padding: 5px 10px;
-          font-size: 12px;
-          cursor: pointer;
-        }
-        
-        .remove-button:hover {
-          background-color: #e04040;
-        }
-        
-        .expand-button {
-          background: none;
-          border: none;
-          font-size: 16px;
-          cursor: pointer;
-          color: #666;
-        }
-        
-        .recording-details {
-          padding: 15px;
-          background-color: #fff;
-        }
-      `}</style>
     </div>
   );
 };
