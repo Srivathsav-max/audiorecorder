@@ -139,67 +139,64 @@ export const combineAudioStreams = async (
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
       sampleRate: 44100 // CD quality sample rate is faster to process
     });
-    
+
     // Convert blobs to array buffers (parallel processing)
     const [micArrayBuffer, sysArrayBuffer] = await Promise.all([
       microphoneBlob.arrayBuffer(),
       systemBlob.arrayBuffer()
     ]);
-    
+
     // Decode the audio data (parallel processing)
     const [micAudioBuffer, sysAudioBuffer] = await Promise.all([
       audioContext.decodeAudioData(micArrayBuffer),
       audioContext.decodeAudioData(sysArrayBuffer)
     ]);
-    
+
     // Get the longest duration
     const maxLength = Math.max(micAudioBuffer.length, sysAudioBuffer.length);
     const sampleRate = micAudioBuffer.sampleRate;
-    
-    // Create an offline context for rendering
+
+    // Create an offline context for rendering - using mono (1 channel) output
+    // for proper mixing instead of stereo channel separation
     const offlineContext = new OfflineAudioContext(
-      2, // Output in stereo
+      1, // Output in mono for proper mixing
       maxLength,
       sampleRate
     );
-    
+
     // Create buffers sources
     const micSource = offlineContext.createBufferSource();
     const sysSource = offlineContext.createBufferSource();
-    
+
     micSource.buffer = micAudioBuffer;
     sysSource.buffer = sysAudioBuffer;
-    
+
     // Create gain nodes to control volume
     const micGain = offlineContext.createGain();
     const sysGain = offlineContext.createGain();
-    
+
     // Adjust levels (mic at 100%, system at 80%)
     micGain.gain.value = 1.0;
     sysGain.gain.value = 0.8;
-    
-    // Create a merger to combine the channels
-    const merger = offlineContext.createChannelMerger(2);
-    
-    // Connect the audio graph
+
+    // Connect audio graph for mixing
     micSource.connect(micGain);
     sysSource.connect(sysGain);
-    
-    micGain.connect(merger, 0, 0); // Mic to left channel
-    sysGain.connect(merger, 0, 1); // System to right channel
-    
-    merger.connect(offlineContext.destination);
-    
+
+    // Connect both to the destination to mix them
+    micGain.connect(offlineContext.destination);
+    sysGain.connect(offlineContext.destination);
+
     // Start the sources
     micSource.start(0);
     sysSource.start(0);
-    
+
     // Render the combined audio
     const renderedBuffer = await offlineContext.startRendering();
-    
+
     // Convert to the desired format using the optimized function
     const mimeType = format === 'mp3' ? 'audio/mpeg' : 'audio/wav';
-    
+
     // Convert AudioBuffer to WAV blob using optimized function
     return optimizedAudioBufferToWav(renderedBuffer, mimeType);
   } catch (error) {
@@ -221,18 +218,18 @@ function audioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): Blob {
   const sampleRate = audioBuffer.sampleRate;
   const bitsPerSample = 24; // Upgrade to 24-bit for higher quality
   const bytesPerSample = bitsPerSample / 8;
-  
+
   // Calculate sizes
   const dataSize = length * numberOfChannels * bytesPerSample;
   const buffer = new ArrayBuffer(44 + dataSize);
   const view = new DataView(buffer);
-  
+
   // Write WAV header
   // "RIFF" Chunk Descriptor
   writeString(view, 0, 'RIFF');
   view.setUint32(4, 36 + dataSize, true);
   writeString(view, 8, 'WAVE');
-  
+
   // "fmt " sub-chunk
   writeString(view, 12, 'fmt ');
   view.setUint32(16, 16, true); // Length of format data
@@ -242,24 +239,24 @@ function audioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): Blob {
   view.setUint32(28, sampleRate * numberOfChannels * bytesPerSample, true); // Byte rate
   view.setUint16(32, numberOfChannels * bytesPerSample, true); // Block align
   view.setUint16(34, bitsPerSample, true);
-  
+
   // "data" sub-chunk
   writeString(view, 36, 'data');
   view.setUint32(40, dataSize, true);
-  
+
   // Write PCM samples
   const offset = 44;
   let pos = offset;
-  
+
   // Interleave channels with 24-bit sample depth
   for (let i = 0; i < length; i++) {
     for (let channel = 0; channel < numberOfChannels; channel++) {
       // Get audio channel data and ensure it's within range [-1,1]
       const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(channel)[i]));
-      
+
       // Convert float to 24-bit integer (range: -8388608 to 8388607)
       const int24 = Math.round(sample < 0 ? sample * 8388608 : sample * 8388607);
-      
+
       // Write 24-bit integer as 3 bytes in little-endian format
       view.setUint8(pos, int24 & 0xFF); // First byte (least significant)
       view.setUint8(pos + 1, (int24 >> 8) & 0xFF); // Second byte
@@ -267,7 +264,7 @@ function audioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): Blob {
       pos += 3; // 24-bit = 3 bytes
     }
   }
-  
+
   return new Blob([buffer], { type: mimeType });
 }
 
@@ -292,13 +289,13 @@ export const convertToHighQualityWav = async (blob: Blob): Promise<Blob> => {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
       sampleRate: 44100
     });
-    
+
     // Read the blob as ArrayBuffer
     const arrayBuffer = await blob.arrayBuffer();
-    
+
     // Decode the audio data
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    
+
     // Use optimized WAV conversion
     return optimizedAudioBufferToWav(audioBuffer, 'audio/wav');
   } catch (error) {
@@ -321,12 +318,12 @@ function optimizedAudioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): 
   const numberOfChannels = audioBuffer.numberOfChannels;
   const length = audioBuffer.length;
   const sampleRate = audioBuffer.sampleRate;
-  
+
   // Calculate sizes
   const dataSize = length * numberOfChannels * bytesPerSample;
   const buffer = new ArrayBuffer(44 + dataSize);
   const view = new DataView(buffer);
-  
+
   // Write WAV header - this is the same as before
   writeString(view, 0, 'RIFF');
   view.setUint32(4, 36 + dataSize, true);
@@ -341,20 +338,20 @@ function optimizedAudioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): 
   view.setUint16(34, bitsPerSample, true);
   writeString(view, 36, 'data');
   view.setUint32(40, dataSize, true);
-  
+
   // Use a typed array for faster processing
   const offset = 44;
   let pos = 0;
-  
+
   // Pre-allocate channel data arrays for better performance
   const channelData = new Array(numberOfChannels);
   for (let channel = 0; channel < numberOfChannels; channel++) {
     channelData[channel] = audioBuffer.getChannelData(channel);
   }
-  
+
   // Process in smaller chunks to avoid browser freezing
   const uint16Array = new Uint16Array(buffer, offset);
-  
+
   // Process optimized way (16-bit samples)
   for (let i = 0; i < length; i++) {
     for (let channel = 0; channel < numberOfChannels; channel++) {
@@ -363,7 +360,7 @@ function optimizedAudioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): 
       uint16Array[pos++] = int16;
     }
   }
-  
+
   return new Blob([buffer], { type: mimeType });
 }
 /**
@@ -373,6 +370,23 @@ function optimizedAudioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): 
  */
 export const getAudioMimeType = (format: 'mp3' | 'wav'): string => {
   return format === 'mp3' ? 'audio/mpeg' : 'audio/wav';
+};
+
+/**
+ * Fetches a list of available audio input devices
+ * @returns A Promise resolving to an array of audio input devices
+ */
+export const getAudioInputDevices = async (): Promise<MediaDeviceInfo[]> => {
+  try {
+    // Get all media devices
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    
+    // Filter for audio input devices only
+    return devices.filter(device => device.kind === 'audioinput');
+  } catch (error) {
+    console.error('Error fetching audio input devices:', error);
+    return [];
+  }
 };
 
 /**

@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { AudioRecorder } from '../AudioRecorder';
 import { RecordingList } from '../RecordingList';
 import { RecordedAudio } from '../AudioRecorder/types';
-import { Card, CardContent } from '@/components/ui/card';
 import { useRecordings } from '@/lib/useRecordings';
 import Image from 'next/image';
 
@@ -25,10 +24,10 @@ export const DualAudioRecorder: React.FC<DualAudioRecorderProps> = ({
   const { 
     recordings, 
     loading, 
-    error, 
-    fetchRecordings, 
+    error,
     addRecording, 
-    deleteRecording 
+    deleteRecording,
+    refresh
   } = useRecordings();
   
   const [isRecording, setIsRecording] = useState(false);
@@ -54,10 +53,8 @@ export const DualAudioRecorder: React.FC<DualAudioRecorderProps> = ({
   return (
     <div className={`max-w-4xl mx-auto p-5 sm:p-8 ${className}`}>
       {/* Hero Section */}
-      <div className="relative bg-gradient-to-b from-primary/5 to-background rounded-2xl p-8 mb-12">
-        <div className="absolute inset-0 bg-grid-white/10 [mask-image:radial-gradient(white,transparent_70%)] rounded-2xl" />
-        
-        <div className="relative flex flex-col items-center text-center">
+      <div className="relative rounded-2xl p-8 mb-12">
+        <div className="flex flex-col items-center text-center">
           <Image
             src="/watchrx-logo-new.png"
             alt="WatchRX Logo"
@@ -79,14 +76,11 @@ export const DualAudioRecorder: React.FC<DualAudioRecorderProps> = ({
       </div>
 
       {/* Recorder Section */}
-      <Card className="mb-12 border-2 shadow-lg">
-        <CardContent className="p-8">
-          <AudioRecorder
-            onRecordingStart={handleRecordingStart}
-            onRecordingStop={handleRecordingStop}
-          />
-        </CardContent>
-      </Card>
+      <AudioRecorder
+          onRecordingStart={handleRecordingStart}
+          onRecordingStop={handleRecordingStop}
+      />
+
 
       {/* Recordings Section */}
       <div className="space-y-6">
@@ -95,7 +89,7 @@ export const DualAudioRecorder: React.FC<DualAudioRecorderProps> = ({
           onRemoveRecording={handleRemoveRecording}
           isLoading={loading}
           error={error}
-          onRetry={fetchRecordings}
+          onRetry={refresh}
         />
       </div>
     </div>

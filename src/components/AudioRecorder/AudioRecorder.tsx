@@ -4,7 +4,9 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { AudioRecorderProps, RecordedAudio } from './types';
+import { AudioRecorderProps, RecordedAudio, AudioDevice } from './types';
+import { DeviceSelector } from './DeviceSelector';
+import { WaveformVisualizer } from './WaveformVisualizer';
 import {
   saveAudioFile,
   getFormattedDateTime,
@@ -24,6 +26,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const [microphoneStream, setMicrophoneStream] = useState<MediaStream | null>(null);
   const [systemStream, setSystemStream] = useState<MediaStream | null>(null);
   const [duration, setDuration] = useState<number>(0);
+  const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
+  const [selectedMicrophoneId, setSelectedMicrophoneId] = useState<string>(
+    typeof window !== 'undefined' ? localStorage.getItem('selectedMicrophoneId') || 'default' : 'default'
+  );
 
   // References for audio recording
   const sessionIdRef = useRef<string>('');
@@ -44,6 +50,102 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     mediaRecorderSupported: false,
   });
 
+  // Fetch available audio devices
+  const fetchAudioDevices = useCallback(async () => {
+    try {
+      // Force request permission to ensure we get device labels
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('Permission granted for microphone');
+      } catch (permissionError) {
+        console.error('Microphone permission error:', permissionError);
+        toast.error('Please allow microphone access to see devices');
+        return;
+      }
+      
+      // Now that we have permission, enumerate all devices
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      
+      // Filter for audio input devices only
+      const audioInputs = allDevices.filter(device => device.kind === 'audioinput');
+      
+      console.log('Available audio devices:', audioInputs);
+      
+      const mappedDevices = audioInputs.map(device => ({
+        id: device.deviceId,
+        label: device.label || `Microphone (${device.deviceId.substring(0, 8)}...)`,
+        kind: device.kind
+      }));
+
+      if (mappedDevices.length > 0) {
+        setAudioDevices(mappedDevices);
+        
+        // If we don't have a selected device yet, select the first one
+        if (selectedMicrophoneId === 'default' && mappedDevices.length > 0) {
+          setSelectedMicrophoneId(mappedDevices[0].id);
+        }
+        
+        toast.success(`Found ${mappedDevices.length} audio devices`);
+      } else {
+        toast.warning('No audio input devices detected');
+      }
+      
+      // Always stop the temporary stream
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    } catch (error) {
+      console.error('Error fetching audio devices:', error);
+      toast.error('Unable to access audio devices');
+    }
+  }, [selectedMicrophoneId]);
+
+  // Handle microphone selection change
+  const handleMicrophoneChange = useCallback(async (deviceId: string) => {
+    console.log('Microphone change requested:', deviceId);
+    
+    if (isRecording || isProcessing) {
+      toast.error('Cannot change microphone while recording or processing');
+      return;
+    }
+    
+    try {
+      // Stop any existing streams
+      if (microphoneStream) {
+        microphoneStream.getTracks().forEach(track => track.stop());
+        setMicrophoneStream(null);
+      }
+
+      // Test the new device immediately
+      const testStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: { exact: deviceId },
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
+      });
+
+      // If we get here, the device works - clean up test stream
+      testStream.getTracks().forEach(track => track.stop());
+      
+      // Update selected device and persist to localStorage
+      setSelectedMicrophoneId(deviceId);
+      localStorage.setItem('selectedMicrophoneId', deviceId);
+      toast.success('Microphone switched successfully');
+    } catch (error) {
+      console.error('Error switching microphone:', error);
+      toast.error('Failed to switch microphone. Please try another device.');
+      
+      // Revert to default if there's an error
+      if (deviceId !== 'default') {
+        setSelectedMicrophoneId('default');
+        localStorage.setItem('selectedMicrophoneId', 'default');
+      }
+    }
+  }, [isRecording, isProcessing, microphoneStream]);
+
   // Start recording
   const startRecording = useCallback(async () => {
     try {
@@ -52,15 +154,16 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       systemChunksRef.current = [];
 
       // Request microphone access with high-quality audio settings
-      const micStream = await navigator.mediaDevices.getUserMedia({ 
+      const micStream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          deviceId: { exact: selectedMicrophoneId },
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
           sampleRate: 48000,
           sampleSize: 24,
           channelCount: 1
-        } 
+        }
       });
       setMicrophoneStream(micStream);
 
@@ -75,10 +178,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
           sampleSize: 24
         },
       });
-      
+
       // Remove video tracks
       sysStream.getVideoTracks().forEach(track => track.stop());
-      
+
       // Create audio-only stream
       const systemAudioStream = new MediaStream();
       sysStream.getAudioTracks().forEach(track => systemAudioStream.addTrack(track));
@@ -110,7 +213,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       systemRecorder.start(1000);
       startTimeRef.current = Date.now();
       setIsRecording(true);
-      
+
       if (onRecordingStart) {
         onRecordingStart();
       }
@@ -119,7 +222,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     } catch (error) {
       console.error('Error starting recording:', error);
       let errorMessage = 'Failed to start recording. Please ensure you have granted the necessary permissions.';
-      
+
       if (error instanceof DOMException) {
         if (error.name === 'NotAllowedError') {
           errorMessage = 'Permission denied. Please allow access to your microphone and screen sharing.';
@@ -133,10 +236,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
           errorMessage = 'Your browser does not support the required audio features.';
         }
       }
-      
+
       toast.error(errorMessage);
     }
-  }, [onRecordingStart]);
+  }, [onRecordingStart, selectedMicrophoneId]);
 
   // Stop recording
   const stopRecording = useCallback(async () => {
@@ -156,10 +259,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       // Create blobs
       const timestamp = getFormattedDateTime();
       const sessionId = sessionIdRef.current;
-      
+
       const microphoneBlob = new Blob(microphoneChunksRef.current);
       const systemBlob = new Blob(systemChunksRef.current);
-      
+
       const microphoneWavBlob = await convertToHighQualityWav(microphoneBlob);
       const systemWavBlob = await convertToHighQualityWav(systemBlob);
 
@@ -251,6 +354,28 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       setBrowserSupport(checkBrowserSupport());
     }
   }, []);
+  
+  // Load audio devices on component mount and setup device change listener
+  useEffect(() => {
+    const initializeDevices = async () => {
+      await fetchAudioDevices();
+      console.log('Initial device fetch complete');
+    };
+
+    initializeDevices();
+
+    // Listen for device changes
+    const handleDeviceChange = async () => {
+      console.log('Device change detected');
+      await fetchAudioDevices();
+    };
+
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, [fetchAudioDevices]);
 
   // Format duration as MM:SS
   const formatDuration = (seconds: number): string => {
@@ -262,84 +387,114 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   // Display browser compatibility warning if needed
   if (!browserSupport.supported) {
     return (
-      <div className="p-4 text-red-800 bg-red-50 rounded-lg">
-        <p className="mb-2">Your browser doesn't support all features required for audio recording:</p>
-        <ul className="list-disc pl-5 space-y-1">
+      <div className="p-4 text-red-800 bg-red-50 rounded-lg shadow-sm">
+        <p className="font-medium mb-2">Your browser doesn't support audio recording</p>
+        <ul className="list-disc pl-5 space-y-1 text-sm">
           <li>MediaRecorder API: {browserSupport.mediaRecorderSupported ? '✓' : '✗'}</li>
           <li>Microphone Access: {browserSupport.microphoneSupported ? '✓' : '✗'}</li>
           <li>Screen Capture: {browserSupport.screenCaptureSupported ? '✓' : '✗'}</li>
         </ul>
-        <p className="mt-2">Please try using a modern browser like Chrome, Edge, or Firefox.</p>
+        <p className="mt-2 text-sm">Please use Chrome, Edge, or Firefox for best results.</p>
       </div>
     );
   }
 
   return (
     <div className={`${className}`}>
-      <div className="relative flex flex-col items-center justify-center p-12 overflow-hidden rounded-2xl bg-gradient-to-b from-background to-secondary/10">
-        {/* Ambient Glow Effect */}
-        <div 
-          className={`absolute inset-0 blur-3xl transition-opacity duration-1000 ${
-            isRecording ? 'opacity-20' : 'opacity-0'
-          }`}
-          style={{
-            background: isRecording 
-              ? 'radial-gradient(circle at center, rgb(239, 68, 68), transparent 70%)'
-              : 'radial-gradient(circle at center, rgb(59, 130, 246), transparent 70%)'
-          }}
-        />
+      <div className="bg-background rounded-xl shadow-sm border border-border/40 overflow-hidden">
+        {/* Card Header */}
+        <div className="p-4 border-b border-border/30">
+          <h3 className="text-lg font-medium">Audio Recorder</h3>
+          <p className="text-sm text-muted-foreground">Record both microphone and system audio</p>
+        </div>
 
-        {/* Main Recording Button */}
-        <div className="relative mb-8">
-          <Button
-            onClick={toggleRecording}
-            variant={isRecording ? "destructive" : "default"}
-            size="lg"
-            className={`
-              h-24 w-24 rounded-full p-0 relative
-              shadow-lg hover:shadow-xl transition-all duration-500
-              ${isRecording ? 'animate-pulse shadow-red-500/20' : ''}
-              ${isProcessing ? 'animate-pulse shadow-blue-500/20' : ''}
-            `}
-            disabled={isProcessing}
-          >
-            <div className={`
-              absolute inset-0 rounded-full opacity-20 transition-all duration-500
-              ${isRecording 
-                ? 'bg-gradient-to-tr from-red-500 to-red-500/80' 
-                : 'bg-gradient-to-tr from-primary to-primary/80'
-              }
-            `} />
-            <Image
-              src={isProcessing ? "/globe.svg" : "/microphone.svg"}
-              width={32}
-              height={32}
-              alt={isProcessing ? "Processing" : "Microphone"}
-              className={`transition-transform duration-500 ${isRecording ? 'scale-90' : 'scale-100'}`}
+        {/* Main Content Area */}
+        <div className="p-6">
+          {/* Device Selection */}
+          <div className="mb-6">
+            <DeviceSelector
+              audioDevices={audioDevices}
+              selectedDeviceId={selectedMicrophoneId}
+              onDeviceChange={handleMicrophoneChange}
+              onRefreshDevices={fetchAudioDevices}
+              disabled={isRecording || isProcessing}
             />
-          </Button>
+          </div>
 
           {/* Recording Status */}
-          <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 whitespace-nowrap">
-            {isRecording ? (
-              <div className="flex items-center gap-3 bg-destructive/10 px-4 py-2 rounded-full">
-                <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                <span className="font-mono text-base font-medium text-destructive">
+          <div className="flex justify-center mb-8">
+            {isRecording && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-destructive/10 rounded-full">
+                <div className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
+                <span className="font-mono text-sm font-medium text-destructive">
                   {formatDuration(duration)}
                 </span>
               </div>
-            ) : isProcessing ? (
-              <div className="flex items-center gap-3 bg-primary/10 px-4 py-2 rounded-full">
-                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="font-mono text-base font-medium text-primary">
-                  Processing...
+            )}
+            
+            {isProcessing && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0s' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                </div>
+                <span className="font-mono text-sm font-medium text-primary">Processing</span>
+              </div>
+            )}
+            
+            {!isRecording && !isProcessing && (
+              <div className="px-4 py-2 bg-muted/50 rounded-full">
+                <span className="text-sm text-muted-foreground">Ready to record</span>
+              </div>
+            )}
+          </div>
+
+          {/* Record Button */}
+          <div className="flex justify-center">
+            <Button
+              onClick={toggleRecording}
+              variant={isRecording ? "destructive" : "default"}
+              size="lg"
+              className={`
+                h-24 w-24 rounded-full p-0
+                relative transition-all duration-300
+                ${isRecording ? 'bg-destructive hover:bg-destructive/90' : 'bg-primary hover:bg-primary/90'}
+                ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}
+                shadow-md hover:shadow-lg
+              `}
+              disabled={isProcessing}
+            >
+              <div className="flex flex-col items-center justify-center">
+                {isRecording ? (
+                  <div className="w-8 h-8 rounded bg-white" />
+                ) : (
+                  <div className="relative">
+                    <Image 
+                      src="/microphone.svg" 
+                      width={28} 
+                      height={28} 
+                      alt="Microphone"
+                      className="text-background"
+                    />
+                  </div>
+                )}
+                <span className="text-xs mt-1 text-background font-medium">
+                  {isRecording ? 'Stop' : 'Record'}
                 </span>
               </div>
-            ) : (
-              <span className="text-sm font-medium text-muted-foreground">
-                Click to start recording
-              </span>
-            )}
+            </Button>
+          </div>
+          
+          {/* Live Waveform Visualization */}
+          <div className="mt-8 pt-6 border-t border-border/30">
+            <WaveformVisualizer
+              isRecording={isRecording}
+              isProcessing={isProcessing}
+              deviceId={selectedMicrophoneId}
+              microphoneStream={microphoneStream}
+              systemStream={systemStream}
+            />
           </div>
         </div>
       </div>

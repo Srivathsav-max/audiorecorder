@@ -11,16 +11,22 @@ export interface AudioRecorderProps {
    * Callback function when recording starts
    */
   onRecordingStart?: () => void;
-  
+
   /**
    * Callback function when recording stops, provides recorded audio data
    */
   onRecordingStop?: (recordings: RecordedAudio) => void;
-  
+
   /**
    * Custom class name for styling
    */
   className?: string;
+}
+
+export interface AudioDevice {
+  id: string;
+  label: string;
+  kind: string;
 }
 
 export interface AudioLevels {
