@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, Play, Pause, Volume2, VolumeX } from "lucide-react";
+import { Download, Play, Pause, Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AudioPlayerProps {
@@ -49,9 +49,23 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       if (isPlaying) {
         audioRef.current.pause();
       } else {
-        audioRef.current.play();
+        audioRef.current.play().catch(() => {
+          toast.error('Failed to play audio');
+        });
       }
       setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleRestart = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      if (!isPlaying) {
+        audioRef.current.play().catch(() => {
+          toast.error('Failed to play audio');
+        });
+        setIsPlaying(true);
+      }
     }
   };
 
@@ -98,14 +112,14 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   return (
     <Card className={cn("mb-4", className)}>
-      <CardHeader className="py-3">
+      <CardHeader className="py-3 border-b">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-medium">{label}</CardTitle>
+          <CardTitle className="text-base font-medium text-primary">{label}</CardTitle>
           <Button 
             variant="outline"
             size="sm"
             onClick={handleDownload}
-            className="gap-2"
+            className="gap-2 hover:bg-primary hover:text-white transition-colors"
           >
             <Download className="h-4 w-4" />
             Download
@@ -123,7 +137,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
         <div className="flex flex-col space-y-2">
           {/* Progress bar */}
-          <div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="relative w-full h-3 bg-secondary/20 rounded-full overflow-hidden group">
             <input
               type="range"
               min={0}
@@ -133,37 +147,48 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
             <div 
-              className="absolute h-full bg-primary rounded-full transition-all duration-100"
+              className="absolute h-full bg-primary/80 group-hover:bg-primary rounded-full transition-all duration-200"
               style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
             />
           </div>
 
           {/* Controls */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 rounded-full"
-                onClick={togglePlay}
-              >
-                {isPlaying ? (
-                  <Pause className="h-4 w-4" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-              </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 rounded-full hover:bg-primary hover:text-white transition-colors"
+                  onClick={togglePlay}
+                >
+                  {isPlaying ? (
+                    <Pause className="h-4 w-4" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </Button>
 
-              <span className="text-xs text-gray-500 font-mono min-w-[70px]">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 rounded-full hover:bg-primary hover:text-white transition-colors"
+                  onClick={handleRestart}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <span className="text-xs text-muted-foreground font-mono min-w-[80px] bg-secondary/10 px-2 py-1 rounded">
                 {formatTime(currentTime)} / {formatTime(duration)}
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 hover:bg-primary hover:text-white transition-colors rounded-full"
                 onClick={toggleMute}
               >
                 {isMuted ? (
@@ -173,7 +198,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 )}
               </Button>
 
-              <div className="relative w-20 h-1.5">
+              <div className="relative w-24 h-2">
                 <input
                   type="range"
                   min={0}
@@ -183,9 +208,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
                   onChange={handleVolumeChange}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
-                <div className="absolute inset-0 bg-gray-100 rounded-full">
+                <div className="absolute inset-0 bg-secondary/20 rounded-full">
                   <div 
-                    className="absolute h-full bg-primary rounded-full transition-all duration-100"
+                    className="absolute h-full bg-primary/80 hover:bg-primary rounded-full transition-all duration-200"
                     style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
                   />
                 </div>

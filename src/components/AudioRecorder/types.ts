@@ -4,6 +4,7 @@ export interface RecordedAudio {
   combinedAudio: string | null;
   timestamp: number;
   format: 'wav';
+  documentId?: string; // Appwrite document ID
 }
 
 export interface AudioRecorderProps {
