@@ -16,6 +16,9 @@ interface RecordingInfo {
  * API route to get all recordings stored on the server
  */
 export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const cursor = searchParams.get('cursor') ? parseInt(searchParams.get('cursor')!) : Date.now();
+  const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 10;
   try {
     // Path to the recordings directory
     const recordingsDir = join(process.cwd(), 'public', 'recordings');
@@ -129,9 +132,21 @@ export async function GET(request: NextRequest) {
       .filter(rec => rec.microphoneAudio || rec.systemAudio) // Ensure at least one audio file exists
       .sort((a, b) => b.timestamp - a.timestamp); // Sort newest first
     
+    // Apply pagination
+    const paginatedResult = result.filter(rec => rec.timestamp < cursor).slice(0, limit);
+    
+    // Get the next cursor (timestamp of the last item)
+    const nextCursor = paginatedResult.length > 0 
+      ? paginatedResult[paginatedResult.length - 1].timestamp 
+      : null;
+    
+    // Check if there are more items
+    const hasMore = result.some(rec => rec.timestamp < (nextCursor || 0));
+
     return NextResponse.json({
       success: true,
-      recordings: result
+      recordings: paginatedResult,
+      nextCursor: hasMore ? nextCursor : null
     });
   } catch (error) {
     console.error('Error reading recordings directory:', error);

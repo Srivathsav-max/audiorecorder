@@ -4,18 +4,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { RecordedAudio } from '@/components/AudioRecorder/types';
 import { toast } from 'sonner';
 
-export function useRecordings() {
+export function useRecordings(initialLimit: number = 10) {
   const [recordings, setRecordings] = useState<RecordedAudio[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
-  // Fetch recordings from server
-  const fetchRecordings = useCallback(async () => {
+  // Fetch initial recordings
+  const fetchInitialRecordings = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('/api/getRecordings');
+      const response = await fetch(`/api/getRecordings?limit=${initialLimit}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch recordings');
@@ -25,6 +28,8 @@ export function useRecordings() {
       
       if (data.success && Array.isArray(data.recordings)) {
         setRecordings(data.recordings);
+        setNextCursor(data.nextCursor);
+        setHasMore(!!data.nextCursor);
       } else {
         throw new Error(data.error || 'Invalid response format');
       }
@@ -42,15 +47,51 @@ export function useRecordings() {
     }
   }, []);
 
+  // Load more recordings
+  const loadMore = useCallback(async () => {
+    if (!hasMore || loading) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/getRecordings?cursor=${nextCursor}&limit=${initialLimit}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch more recordings');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && Array.isArray(data.recordings)) {
+        setRecordings(prev => [...prev, ...data.recordings]);
+        setNextCursor(data.nextCursor);
+        setHasMore(!!data.nextCursor);
+      } else {
+        throw new Error(data.error || 'Invalid response format');
+      }
+    } catch (err) {
+      console.error('Error fetching more recordings:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      
+      if (navigator.onLine) {
+        toast.error('Failed to load more recordings');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [hasMore, loading, nextCursor, initialLimit]);
+
   // Initial fetch on mount
   useEffect(() => {
-    fetchRecordings();
-    
-    // Optional: set up periodic refreshing (e.g., every 30 seconds)
-    const intervalId = setInterval(fetchRecordings, 30000);
-    
-    return () => clearInterval(intervalId);
-  }, [fetchRecordings]);
+    if (!initialLoadDone) {
+      setLoading(true);
+      fetchInitialRecordings().finally(() => {
+        setLoading(false);
+        setInitialLoadDone(true);
+      });
+    }
+  }, [fetchInitialRecordings, initialLoadDone]);
 
   // Function to add a new recording
   const addRecording = useCallback((newRecording: RecordedAudio) => {
@@ -113,16 +154,18 @@ export function useRecordings() {
       toast.error('Failed to delete recording');
       
       // Fetch recordings again to restore correct state
-      fetchRecordings();
+      fetchInitialRecordings();
     }
-  }, [recordings, fetchRecordings]);
+  }, [recordings, fetchInitialRecordings]);
 
   return {
     recordings,
     loading,
     error,
-    fetchRecordings,
+    hasMore,
+    loadMore,
     addRecording,
-    deleteRecording
+    deleteRecording,
+    refresh: fetchInitialRecordings
   };
 }
