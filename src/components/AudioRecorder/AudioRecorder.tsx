@@ -5,12 +5,13 @@ import Image from 'next/image';
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AudioRecorderProps, RecordedAudio } from './types';
-import { 
-  saveAudioFile, 
-  getFormattedDateTime, 
-  createSessionId, 
+import {
+  saveAudioFile,
+  getFormattedDateTime,
+  createSessionId,
   combineAudioStreams,
-  checkBrowserSupport
+  checkBrowserSupport,
+  convertToHighQualityWav
 } from './utils';
 
 /**
@@ -23,6 +24,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 }) => {
   // State to track recording status and data
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [microphoneStream, setMicrophoneStream] = useState<MediaStream | null>(null);
   const [systemStream, setSystemStream] = useState<MediaStream | null>(null);
   const [microphoneLevel, setMicrophoneLevel] = useState<number>(0);
@@ -112,29 +114,57 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       microphoneChunksRef.current = [];
       systemChunksRef.current = [];
 
-      // Request microphone access
-      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request microphone access with high-quality audio settings
+      const micStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: 48000,
+          sampleSize: 24,
+          channelCount: 1
+        } 
+      });
       setMicrophoneStream(micStream);
       setupAudioAnalysis(micStream, false);
 
-      // Request system audio access
+      // Request system audio access (we need video:true for browser to show screen selection dialog, but we'll discard the video)
       const sysStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
+        video: true, // Required to show dialog, but we'll remove the video track
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: 48000,
+          sampleSize: 24
+        },
       });
-      setSystemStream(sysStream);
-      setupAudioAnalysis(sysStream, true);
+      
+      // Remove video tracks - we only want audio
+      sysStream.getVideoTracks().forEach(track => track.stop());
+      
+      // Create audio-only stream with the system audio
+      const systemAudioStream = new MediaStream();
+      sysStream.getAudioTracks().forEach(track => systemAudioStream.addTrack(track));
+      setSystemStream(systemAudioStream);
+      setupAudioAnalysis(systemAudioStream, true);
 
-      // Set up microphone recorder
-      const microphoneRecorder = new MediaRecorder(micStream);
+      // Set up microphone recorder with high quality options
+      const microphoneRecorder = new MediaRecorder(micStream, {
+        mimeType: 'audio/webm;codecs=pcm',
+        audioBitsPerSecond: 256000 // 256 kbps for high quality
+      });
       microphoneRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           microphoneChunksRef.current.push(event.data);
         }
       };
 
-      // Set up system audio recorder
-      const systemRecorder = new MediaRecorder(sysStream);
+      // Set up system audio recorder with high quality options
+      const systemRecorder = new MediaRecorder(systemAudioStream, {
+        mimeType: 'audio/webm;codecs=pcm',
+        audioBitsPerSecond: 256000 // 256 kbps for high quality
+      });
       systemRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           systemChunksRef.current.push(event.data);
@@ -146,10 +176,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       systemRecorder.start(1000);
       startTimeRef.current = Date.now();
       setIsRecording(true);
-      
+
       // Start visualization
       updateLevels();
-      
+
       if (onRecordingStart) {
         onRecordingStart();
       }
@@ -157,7 +187,24 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       toast.success("Recording started");
     } catch (error) {
       console.error('Error starting recording:', error);
-      toast.error('Failed to start recording. Please ensure you have granted the necessary permissions.');
+      // Check error type and provide more specific messages
+      let errorMessage = 'Failed to start recording. Please ensure you have granted the necessary permissions.';
+      
+      if (error instanceof DOMException) {
+        if (error.name === 'NotAllowedError') {
+          errorMessage = 'Permission denied. Please allow access to your microphone and screen sharing.';
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = 'No microphone was found. Please connect a microphone and try again.';
+        } else if (error.name === 'NotReadableError') {
+          errorMessage = 'Your microphone or system audio is already in use by another application.';
+        } else if (error.name === 'AbortError') {
+          errorMessage = 'Recording was aborted. Please try again.';
+        } else if (error.name === 'NotSupportedError') {
+          errorMessage = 'Your browser does not support the required audio features.';
+        }
+      }
+      
+      toast.error(errorMessage);
     }
   }, [setupAudioAnalysis, updateLevels, onRecordingStart]);
 
@@ -169,6 +216,11 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       if (!startTimeRef.current) {
         throw new Error('Invalid recording state');
       }
+
+      // Update UI state immediately
+      setIsRecording(false);
+      setIsProcessing(true);
+      toast.info("Processing audio recording...");
 
       // Stop visualization
       if (animationFrameRef.current) {
@@ -182,23 +234,28 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       // Create blobs
       const timestamp = getFormattedDateTime();
       const sessionId = sessionIdRef.current;
+      
+      // Use raw audio data for best quality conversion
+      const microphoneBlob = new Blob(microphoneChunksRef.current);
+      const systemBlob = new Blob(systemChunksRef.current);
+      
+      // Convert to high-quality WAV before saving
       const mimeType = 'audio/wav';
-
-      const microphoneBlob = new Blob(microphoneChunksRef.current, { type: mimeType });
-      const systemBlob = new Blob(systemChunksRef.current, { type: mimeType });
+      const microphoneWavBlob = await convertToHighQualityWav(microphoneBlob);
+      const systemWavBlob = await convertToHighQualityWav(systemBlob);
 
       // Generate filenames
       const microphoneFilename = `microphone_${timestamp}_${sessionId}.wav`;
       const systemFilename = `system_${timestamp}_${sessionId}.wav`;
 
       // Save recordings
-      const microphoneUrl = await saveAudioFile(microphoneBlob, microphoneFilename);
-      const systemUrl = await saveAudioFile(systemBlob, systemFilename);
+      const microphoneUrl = await saveAudioFile(microphoneWavBlob, microphoneFilename);
+      const systemUrl = await saveAudioFile(systemWavBlob, systemFilename);
 
       // Combine audio streams
       let combinedUrl: string | null = null;
       try {
-        const combinedBlob = await combineAudioStreams(microphoneBlob, systemBlob, 'wav');
+        const combinedBlob = await combineAudioStreams(microphoneWavBlob, systemWavBlob, 'wav');
         if (combinedBlob) {
           const combinedFilename = `combined_${timestamp}_${sessionId}.wav`;
           combinedUrl = await saveAudioFile(combinedBlob, combinedFilename);
@@ -208,7 +265,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       }
 
       // Reset state
-      setIsRecording(false);
+      setIsProcessing(false);
       setMicrophoneStream(null);
       setSystemStream(null);
       startTimeRef.current = null;
@@ -235,9 +292,9 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     } catch (error) {
       console.error('Error stopping recording:', error);
       toast.error('There was an error processing the recording.');
-      
+
       // Reset state
-      setIsRecording(false);
+      setIsProcessing(false);
       setMicrophoneStream(null);
       setSystemStream(null);
       startTimeRef.current = null;
@@ -261,7 +318,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   // Update duration while recording
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    
+
     if (isRecording && startTimeRef.current) {
       interval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTimeRef.current!) / 1000);
@@ -270,7 +327,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     } else {
       setDuration(0);
     }
-    
+
     return () => {
       if (interval) {
         clearInterval(interval);
@@ -304,7 +361,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     <div className={`space-y-4 ${className}`}>
       <div className="flex flex-col space-y-4">
         <div className="relative w-full h-[50px] bg-gray-50 rounded-lg overflow-hidden">
-          <div 
+          <div
             className="absolute inset-0 bg-blue-500 opacity-50 transition-transform duration-75 origin-left"
             style={{ transform: `scaleX(${microphoneLevel})` }}
           />
@@ -314,7 +371,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         </div>
 
         <div className="relative w-full h-[50px] bg-gray-50 rounded-lg overflow-hidden">
-          <div 
+          <div
             className="absolute inset-0 bg-green-500 opacity-50 transition-transform duration-75 origin-left"
             style={{ transform: `scaleX(${systemLevel})` }}
           />
@@ -325,26 +382,38 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       </div>
 
       <div className="flex justify-between items-center">
-        <Button 
+        <Button
           onClick={toggleRecording}
-          variant={isRecording ? "destructive" : "default"}
-          className={`gap-2 ${isRecording ? 'animate-pulse' : ''}`}
+          variant={isRecording ? "destructive" : isProcessing ? "outline" : "default"}
+          className={`gap-2 ${isRecording || isProcessing ? 'animate-pulse' : ''}`}
           size="lg"
+          disabled={isProcessing}
         >
           <Image
-            src="/microphone.svg"
+            src={isProcessing ? "/globe.svg" : "/microphone.svg"}
             width={24}
             height={24}
-            alt="Microphone"
-            className={`${isRecording ? 'animate-pulse' : ''}`}
+            alt={isProcessing ? "Processing" : "Microphone"}
+            className={`${isRecording || isProcessing ? 'animate-pulse' : ''}`}
           />
-          <span>{isRecording ? 'Stop Recording' : 'Start Recording'}</span>
+          <span>
+            {isRecording ? 'Stop Recording' : 
+             isProcessing ? 'Processing...' : 
+             'Start Recording'}
+          </span>
         </Button>
-        
+
         {isRecording && (
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
             <span className="font-mono text-lg">{formatDuration(duration)}</span>
+          </div>
+        )}
+        
+        {isProcessing && (
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
+            <span className="font-mono text-lg">Processing audio...</span>
           </div>
         )}
       </div>

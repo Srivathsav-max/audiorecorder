@@ -13,6 +13,8 @@
 # testing
 /coverage
 
+public/recordings
+
 # next.js
 /.next/
 /out/

@@ -14,8 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Dual Audio Recorder - Nurse-Patient Calls",
-  description: "Record both microphone and system audio for nurse-patient calls for government record purposes",
+  title: "Healthcare Communication Recorder",
+  description: "Enterprise-grade dual audio capture system designed for healthcare professionals. Securely records and archives communication sessions with integrated system and microphone audio.",
+  keywords: "healthcare, audio recorder, communication, medical records, dual audio, patient calls",
+  authors: [{ name: "WatchRX" }],
   icons: {
     icon: '/favicon.ico',
   },
