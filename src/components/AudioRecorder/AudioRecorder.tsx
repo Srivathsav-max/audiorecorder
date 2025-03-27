@@ -8,13 +8,12 @@ import { AudioRecorderProps, RecordedAudio, AudioDevice } from './types';
 import { DeviceSelector } from './DeviceSelector';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import {
-  saveAudioFile,
-  getFormattedDateTime,
   createSessionId,
   combineAudioStreams,
   checkBrowserSupport,
   convertToHighQualityWav
 } from './utils';
+import { saveRecordingToAppwrite } from './appwrite-utils';
 
 export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   onRecordingStart,
@@ -51,7 +50,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   });
 
   // Fetch available audio devices
-  const fetchAudioDevices = useCallback(async () => {
+  const fetchAudioDevices = async () => {
     try {
       // Force request permission to ensure we get device labels
       let stream = null;
@@ -66,11 +65,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       
       // Now that we have permission, enumerate all devices
       const allDevices = await navigator.mediaDevices.enumerateDevices();
-      
-      // Filter for audio input devices only
       const audioInputs = allDevices.filter(device => device.kind === 'audioinput');
-      
-      console.log('Available audio devices:', audioInputs);
       
       const mappedDevices = audioInputs.map(device => ({
         id: device.deviceId,
@@ -81,9 +76,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       if (mappedDevices.length > 0) {
         setAudioDevices(mappedDevices);
         
-        // If we don't have a selected device yet, select the first one
-        if (selectedMicrophoneId === 'default' && mappedDevices.length > 0) {
+        // Set first device only if no device is selected
+        if (!localStorage.getItem('selectedMicrophoneId') && mappedDevices.length > 0) {
           setSelectedMicrophoneId(mappedDevices[0].id);
+          localStorage.setItem('selectedMicrophoneId', mappedDevices[0].id);
         }
         
         toast.success(`Found ${mappedDevices.length} audio devices`);
@@ -99,51 +95,24 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       console.error('Error fetching audio devices:', error);
       toast.error('Unable to access audio devices');
     }
-  }, [selectedMicrophoneId]);
+  };
 
   // Handle microphone selection change
-  const handleMicrophoneChange = useCallback(async (deviceId: string) => {
-    console.log('Microphone change requested:', deviceId);
-    
+  const handleMicrophoneChange = useCallback((deviceId: string) => {
     if (isRecording || isProcessing) {
       toast.error('Cannot change microphone while recording or processing');
       return;
     }
     
-    try {
-      // Stop any existing streams
-      if (microphoneStream) {
-        microphoneStream.getTracks().forEach(track => track.stop());
-        setMicrophoneStream(null);
-      }
-
-      // Test the new device immediately
-      const testStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: { exact: deviceId },
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
-        }
-      });
-
-      // If we get here, the device works - clean up test stream
-      testStream.getTracks().forEach(track => track.stop());
-      
-      // Update selected device and persist to localStorage
-      setSelectedMicrophoneId(deviceId);
-      localStorage.setItem('selectedMicrophoneId', deviceId);
-      toast.success('Microphone switched successfully');
-    } catch (error) {
-      console.error('Error switching microphone:', error);
-      toast.error('Failed to switch microphone. Please try another device.');
-      
-      // Revert to default if there's an error
-      if (deviceId !== 'default') {
-        setSelectedMicrophoneId('default');
-        localStorage.setItem('selectedMicrophoneId', 'default');
-      }
+    // Stop any existing streams
+    if (microphoneStream) {
+      microphoneStream.getTracks().forEach(track => track.stop());
+      setMicrophoneStream(null);
     }
+    
+    // Update selected device and persist to localStorage
+    setSelectedMicrophoneId(deviceId);
+    localStorage.setItem('selectedMicrophoneId', deviceId);
   }, [isRecording, isProcessing, microphoneStream]);
 
   // Start recording
@@ -257,55 +226,61 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       systemStream?.getTracks().forEach(track => track.stop());
 
       // Create blobs
-      const timestamp = getFormattedDateTime();
       const sessionId = sessionIdRef.current;
-
       const microphoneBlob = new Blob(microphoneChunksRef.current);
       const systemBlob = new Blob(systemChunksRef.current);
 
       const microphoneWavBlob = await convertToHighQualityWav(microphoneBlob);
       const systemWavBlob = await convertToHighQualityWav(systemBlob);
 
-      // Save recordings
-      const microphoneFilename = `microphone_${timestamp}_${sessionId}.wav`;
-      const systemFilename = `system_${timestamp}_${sessionId}.wav`;
-      const microphoneUrl = await saveAudioFile(microphoneWavBlob, microphoneFilename);
-      const systemUrl = await saveAudioFile(systemWavBlob, systemFilename);
-
       // Combine audio streams
-      let combinedUrl: string | null = null;
+      let combinedWavBlob: Blob | null = null;
       try {
-        const combinedBlob = await combineAudioStreams(microphoneWavBlob, systemWavBlob, 'wav');
-        if (combinedBlob) {
-          const combinedFilename = `combined_${timestamp}_${sessionId}.wav`;
-          combinedUrl = await saveAudioFile(combinedBlob, combinedFilename);
+        combinedWavBlob = await combineAudioStreams(microphoneWavBlob, systemWavBlob, 'wav');
+        if (!combinedWavBlob) {
+          throw new Error('Failed to create combined audio');
         }
       } catch (error) {
         console.error('Error combining audio streams:', error);
+        toast.error('Could not create combined audio stream');
       }
 
-      // Reset state
-      setIsProcessing(false);
-      setMicrophoneStream(null);
-      setSystemStream(null);
-      startTimeRef.current = null;
-      setDuration(0);
+      // Save to Appwrite
+      try {
+        const result = await saveRecordingToAppwrite(
+          sessionId,
+          microphoneWavBlob,
+          systemWavBlob,
+          combinedWavBlob
+        );
 
-      // Create result
-      const recordings: RecordedAudio = {
-        microphoneAudio: microphoneUrl,
-        systemAudio: systemUrl,
-        combinedAudio: combinedUrl,
-        timestamp: Date.now(),
-        format: 'wav'
-      };
+        // Create result
+        const recordings: RecordedAudio = {
+          microphoneAudio: result.microphoneAudioUrl,
+          systemAudio: result.systemAudioUrl,
+          combinedAudio: result.combinedAudioUrl,
+          timestamp: Date.now(),
+          format: 'wav',
+          documentId: result.documentId
+        };
 
-      if (onRecordingStop) {
-        onRecordingStop(recordings);
+        if (onRecordingStop) {
+          onRecordingStop(recordings);
+        }
+
+        toast.success("Recording saved to Appwrite");
+        return recordings;
+      } catch (error) {
+        console.error('Error saving to Appwrite:', error);
+        toast.error('Failed to save recording to Appwrite');
+      } finally {
+        // Reset state
+        setIsProcessing(false);
+        setMicrophoneStream(null);
+        setSystemStream(null);
+        startTimeRef.current = null;
+        setDuration(0);
       }
-
-      toast.success("Recording saved successfully");
-      return recordings;
     } catch (error) {
       console.error('Error stopping recording:', error);
       toast.error('There was an error processing the recording.');
@@ -357,17 +332,12 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   
   // Load audio devices on component mount and setup device change listener
   useEffect(() => {
-    const initializeDevices = async () => {
-      await fetchAudioDevices();
-      console.log('Initial device fetch complete');
-    };
-
-    initializeDevices();
+    fetchAudioDevices();
 
     // Listen for device changes
-    const handleDeviceChange = async () => {
+    const handleDeviceChange = () => {
       console.log('Device change detected');
-      await fetchAudioDevices();
+      fetchAudioDevices();
     };
 
     navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
@@ -375,7 +345,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     return () => {
       navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
     };
-  }, [fetchAudioDevices]);
+  }, []);
 
   // Format duration as MM:SS
   const formatDuration = (seconds: number): string => {
@@ -388,7 +358,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   if (!browserSupport.supported) {
     return (
       <div className="p-4 text-red-800 bg-red-50 rounded-lg shadow-sm">
-        <p className="font-medium mb-2">Your browser doesn't support audio recording</p>
+        <p className="font-medium mb-2">Your browser doesn&apos;t support audio recording</p>
         <ul className="list-disc pl-5 space-y-1 text-sm">
           <li>MediaRecorder API: {browserSupport.mediaRecorderSupported ? '✓' : '✗'}</li>
           <li>Microphone Access: {browserSupport.microphoneSupported ? '✓' : '✗'}</li>
@@ -401,15 +371,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
   return (
     <div className={`${className}`}>
-      <div className="bg-background rounded-xl shadow-sm border border-border/40 overflow-hidden">
-        {/* Card Header */}
-        <div className="p-4 border-b border-border/30">
-          <h3 className="text-lg font-medium">Audio Recorder</h3>
-          <p className="text-sm text-muted-foreground">Record both microphone and system audio</p>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="p-6">
+      {/* Main Content Area */}
+      <div className="p-6">
           {/* Device Selection */}
           <div className="mb-6">
             <DeviceSelector
@@ -491,12 +454,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
             <WaveformVisualizer
               isRecording={isRecording}
               isProcessing={isProcessing}
-              deviceId={selectedMicrophoneId}
               microphoneStream={microphoneStream}
               systemStream={systemStream}
             />
           </div>
-        </div>
       </div>
     </div>
   );

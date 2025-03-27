@@ -1,35 +1,4 @@
 /**
- * Saves a Blob as a file and returns the file URL
- * @param blob - The Blob to save
- * @param filename - The name to save the file as
- * @returns The URL of the saved file
- */
-export const saveAudioFile = async (blob: Blob, filename: string): Promise<string> => {
-  try {
-    // For browser environments, we save to the public/recordings directory
-    const formData = new FormData();
-    formData.append('audio', blob, filename);
-
-    // Send the file to the server for saving
-    const response = await fetch('/api/saveRecording', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to save recording');
-    }
-
-    const data = await response.json();
-    return data.fileUrl;
-  } catch (error) {
-    console.error('Error saving audio file:', error);
-    // Fallback to creating a blob URL if server save fails
-    return URL.createObjectURL(blob);
-  }
-};
-
-/**
  * Generates a formatted date-time string for filenames
  * @returns A formatted date-time string (YYYY-MM-DD_HH-MM-SS)
  */
@@ -55,74 +24,6 @@ export const createSessionId = (): string => {
 };
 
 /**
- * Converts audio format
- * @param blob - The audio blob
- * @param mimeType - The target MIME type
- * @returns A Promise resolving to the converted Blob
- */
-export const convertAudioFormat = (blob: Blob, mimeType: string): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    // Create a FileReader to read the blob
-    const reader = new FileReader();
-
-    reader.onload = (event) => {
-      if (!event.target?.result) {
-        reject(new Error('Failed to read audio data'));
-        return;
-      }
-
-      // Create an AudioContext
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-
-      // Decode the audio data
-      audioContext.decodeAudioData(event.target.result as ArrayBuffer)
-        .then((audioBuffer) => {
-          // Convert the AudioBuffer to the desired format
-          const offlineContext = new OfflineAudioContext(
-            audioBuffer.numberOfChannels,
-            audioBuffer.length,
-            audioBuffer.sampleRate
-          );
-
-          const source = offlineContext.createBufferSource();
-          source.buffer = audioBuffer;
-          source.connect(offlineContext.destination);
-          source.start(0);
-
-          offlineContext.startRendering()
-            .then((renderedBuffer) => {
-              // Convert the rendered buffer to the desired format
-              const length = renderedBuffer.length;
-              const numberOfChannels = renderedBuffer.numberOfChannels;
-              const sampleRate = renderedBuffer.sampleRate;
-
-              const audioData = new Float32Array(length * numberOfChannels);
-
-              for (let channel = 0; channel < numberOfChannels; channel++) {
-                const channelData = renderedBuffer.getChannelData(channel);
-                for (let i = 0; i < length; i++) {
-                  audioData[i * numberOfChannels + channel] = channelData[i];
-                }
-              }
-
-              // Create a new blob with the converted audio data
-              const wavBlob = new Blob([audioData], { type: mimeType });
-              resolve(wavBlob);
-            })
-            .catch(reject);
-        })
-        .catch(reject);
-    };
-
-    reader.onerror = () => {
-      reject(new Error('Error reading audio data'));
-    };
-
-    reader.readAsArrayBuffer(blob);
-  });
-};
-
-/**
  * Combines two audio streams into one
  * @param microphoneBlob - The microphone audio blob
  * @param systemBlob - The system audio blob
@@ -136,7 +37,7 @@ export const combineAudioStreams = async (
 ): Promise<Blob | null> => {
   try {
     // Create an AudioContext with CD quality for faster processing
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+    const audioContext = new (window.AudioContext || ((window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext))({
       sampleRate: 44100 // CD quality sample rate is faster to process
     });
 
@@ -211,66 +112,6 @@ export const combineAudioStreams = async (
  * @param mimeType - The MIME type for the output
  * @returns A Blob containing the WAV data
  */
-function audioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): Blob {
-  // Get the PCM data
-  const numberOfChannels = audioBuffer.numberOfChannels;
-  const length = audioBuffer.length;
-  const sampleRate = audioBuffer.sampleRate;
-  const bitsPerSample = 24; // Upgrade to 24-bit for higher quality
-  const bytesPerSample = bitsPerSample / 8;
-
-  // Calculate sizes
-  const dataSize = length * numberOfChannels * bytesPerSample;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  // Write WAV header
-  // "RIFF" Chunk Descriptor
-  writeString(view, 0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeString(view, 8, 'WAVE');
-
-  // "fmt " sub-chunk
-  writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true); // Length of format data
-  view.setUint16(20, 1, true); // PCM format
-  view.setUint16(22, numberOfChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * numberOfChannels * bytesPerSample, true); // Byte rate
-  view.setUint16(32, numberOfChannels * bytesPerSample, true); // Block align
-  view.setUint16(34, bitsPerSample, true);
-
-  // "data" sub-chunk
-  writeString(view, 36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  // Write PCM samples
-  const offset = 44;
-  let pos = offset;
-
-  // Interleave channels with 24-bit sample depth
-  for (let i = 0; i < length; i++) {
-    for (let channel = 0; channel < numberOfChannels; channel++) {
-      // Get audio channel data and ensure it's within range [-1,1]
-      const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(channel)[i]));
-
-      // Convert float to 24-bit integer (range: -8388608 to 8388607)
-      const int24 = Math.round(sample < 0 ? sample * 8388608 : sample * 8388607);
-
-      // Write 24-bit integer as 3 bytes in little-endian format
-      view.setUint8(pos, int24 & 0xFF); // First byte (least significant)
-      view.setUint8(pos + 1, (int24 >> 8) & 0xFF); // Second byte
-      view.setUint8(pos + 2, (int24 >> 16) & 0xFF); // Third byte (most significant)
-      pos += 3; // 24-bit = 3 bytes
-    }
-  }
-
-  return new Blob([buffer], { type: mimeType });
-}
-
-/**
- * Helper function to write a string to a DataView
- */
 function writeString(view: DataView, offset: number, string: string): void {
   for (let i = 0; i < string.length; i++) {
     view.setUint8(offset + i, string.charCodeAt(i));
@@ -286,7 +127,7 @@ export const convertToHighQualityWav = async (blob: Blob): Promise<Blob> => {
   try {
     // Create audio context with lower sample rate for faster processing
     // 44.1kHz is still CD quality and processes faster than 48kHz
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+    const audioContext = new (window.AudioContext || ((window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext))({
       sampleRate: 44100
     });
 
@@ -363,31 +204,6 @@ function optimizedAudioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): 
 
   return new Blob([buffer], { type: mimeType });
 }
-/**
- * Gets the MIME type string for the selected audio format
- * @param format - The audio format ('mp3' or 'wav')
- * @returns The corresponding MIME type string
- */
-export const getAudioMimeType = (format: 'mp3' | 'wav'): string => {
-  return format === 'mp3' ? 'audio/mpeg' : 'audio/wav';
-};
-
-/**
- * Fetches a list of available audio input devices
- * @returns A Promise resolving to an array of audio input devices
- */
-export const getAudioInputDevices = async (): Promise<MediaDeviceInfo[]> => {
-  try {
-    // Get all media devices
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    
-    // Filter for audio input devices only
-    return devices.filter(device => device.kind === 'audioinput');
-  } catch (error) {
-    console.error('Error fetching audio input devices:', error);
-    return [];
-  }
-};
 
 /**
  * Checks if the browser supports all required recording features
