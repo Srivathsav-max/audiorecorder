@@ -3,13 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RecordedAudio } from '@/components/AudioRecorder/types';
 import { toast } from 'sonner';
+import { getCookie, AUTH_COOKIE_NAME } from './cookies';
 
 export function useRecordings(initialLimit: number = 10) {
   const [recordings, setRecordings] = useState<RecordedAudio[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
-  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   // Fetch initial recordings
@@ -18,7 +19,16 @@ export function useRecordings(initialLimit: number = 10) {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`/api/getRecordings?limit=${initialLimit}`);
+      const token = getCookie(AUTH_COOKIE_NAME);
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`/api/recordings?limit=${initialLimit}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
       if (!response.ok) {
         throw new Error('Failed to fetch recordings');
@@ -38,7 +48,6 @@ export function useRecordings(initialLimit: number = 10) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       
       // Only show a toast if this appears to be a server error, not a network error
-      // (to avoid showing errors when offline)
       if (navigator.onLine) {
         toast.error('Failed to load recordings');
       }
@@ -55,7 +64,19 @@ export function useRecordings(initialLimit: number = 10) {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`/api/getRecordings?cursor=${nextCursor}&limit=${initialLimit}`);
+      const token = getCookie(AUTH_COOKIE_NAME);
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(
+        `/api/recordings?cursor=${nextCursor}&limit=${initialLimit}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
       
       if (!response.ok) {
         throw new Error('Failed to fetch more recordings');
@@ -85,9 +106,7 @@ export function useRecordings(initialLimit: number = 10) {
   // Initial fetch on mount
   useEffect(() => {
     if (!initialLoadDone) {
-      setLoading(true);
       fetchInitialRecordings().finally(() => {
-        setLoading(false);
         setInitialLoadDone(true);
       });
     }
@@ -103,51 +122,28 @@ export function useRecordings(initialLimit: number = 10) {
     if (index < 0 || index >= recordings.length) return;
     
     const recording = recordings[index];
+    const token = getCookie(AUTH_COOKIE_NAME);
     
-    // Extract filenames from URLs
-    const getFilenameFromUrl = (url: string | null) => {
-      if (!url) return null;
-      return url.split('/').pop(); // Get the last part after the slash
-    };
-    
-    const microphoneFilename = getFilenameFromUrl(recording.microphoneAudio);
-    const systemFilename = getFilenameFromUrl(recording.systemAudio);
-    const combinedFilename = getFilenameFromUrl(recording.combinedAudio);
+    if (!token) {
+      toast.error('Authentication required');
+      return;
+    }
     
     // Optimistically update UI
     setRecordings(prev => prev.filter((_, i) => i !== index));
     
     try {
-      // Delete each file
-      const deletePromises: Promise<Response>[] = [];
-      
-      if (microphoneFilename) {
-        deletePromises.push(
-          fetch(`/api/deleteRecording?filename=${encodeURIComponent(microphoneFilename)}`, {
-            method: 'DELETE'
-          })
-        );
+      const response = await fetch(`/api/recordings?id=${recording.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete recording');
       }
-      
-      if (systemFilename) {
-        deletePromises.push(
-          fetch(`/api/deleteRecording?filename=${encodeURIComponent(systemFilename)}`, {
-            method: 'DELETE'
-          })
-        );
-      }
-      
-      if (combinedFilename) {
-        deletePromises.push(
-          fetch(`/api/deleteRecording?filename=${encodeURIComponent(combinedFilename)}`, {
-            method: 'DELETE'
-          })
-        );
-      }
-      
-      // Wait for all delete operations to complete
-      await Promise.all(deletePromises);
-      
+
       toast.success('Recording deleted successfully');
     } catch (err) {
       console.error('Error deleting recording:', err);

@@ -6,7 +6,7 @@ import { OfflineState } from '@/components/OfflineState';
 import { useNetwork } from '@/components/NetworkStatus';
 import Image from 'next/image';
 
-export default function Home() {
+export default function HomePage() {
   const { isOnline } = useNetwork();
   return (
     <main className="min-h-screen p-6 sm:p-10">

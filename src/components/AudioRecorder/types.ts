@@ -1,10 +1,13 @@
 export interface RecordedAudio {
+  id: string;            // PostgreSQL record ID
+  sessionId: string;     // Appwrite ID (for storage)
+  name: string;
   microphoneAudio: string;
   systemAudio: string;
   combinedAudio: string | null;
-  timestamp: number;
+  timestamp: Date;
+  duration: number;
   format: 'wav';
-  documentId?: string; // Appwrite document ID
 }
 
 export interface AudioRecorderProps {
