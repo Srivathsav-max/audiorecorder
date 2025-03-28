@@ -1,73 +1,123 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromToken } from "@/lib/auth";
-import { saveRecording } from "@/lib/recording-service";
-import { getFormattedDateTime } from "@/components/AudioRecorder/utils";
+import { prisma } from "@/lib/prisma";
+import { storage, APPWRITE_STORAGE_BUCKET_ID } from "@/lib/appwrite";
+import { ID } from "appwrite";
+import { ApiError, withErrorHandling } from "@/lib/error-handler";
 
-export async function POST(req: NextRequest) {
+/**
+ * Helper function to upload a file to Appwrite and handle errors
+ */
+async function uploadFileToAppwrite(file: File, filename: string): Promise<string> {
   try {
+    // Create a unique file ID
+    const fileId = ID.unique();
+    
+    // Upload file
+    const result = await storage.createFile(
+      APPWRITE_STORAGE_BUCKET_ID,
+      fileId,
+      file
+    );
+    
+    return result.$id;
+  } catch (error) {
+    console.error(`Error uploading ${filename} to Appwrite:`, error);
+    throw new ApiError(`Error uploading ${filename}`, 500, error);
+  }
+}
+
+/**
+ * POST /api/recordings/save
+ * 
+ * Saves a new recording to Appwrite storage and database
+ */
+export async function POST(req: NextRequest) {
+  return withErrorHandling(async () => {
+    // Authenticate user
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      throw new ApiError('Unauthorized', 401);
     }
 
     const token = authHeader.split(' ')[1];
     const user = await getUserFromToken(token);
 
+    // Parse form data
     const formData = await req.formData();
     const sessionId = formData.get('sessionId') as string;
-
-    if (!sessionId) {
-      return NextResponse.json(
-        { error: 'Missing session ID' },
-        { status: 400 }
-      );
-    }
-
-    // Convert blobs to File objects with proper metadata
     const microphoneBlob = formData.get('microphoneAudio') as Blob;
     const systemBlob = formData.get('systemAudio') as Blob;
     const combinedBlob = formData.get('combinedAudio') as Blob || null;
 
+    // Validate required fields
+    if (!sessionId) {
+      throw new ApiError('Missing session ID', 400);
+    }
+
     if (!microphoneBlob || !systemBlob) {
-      return NextResponse.json(
-        { error: 'Missing required audio files' },
-        { status: 400 }
-      );
+      throw new ApiError('Missing required audio files', 400);
     }
 
     // Convert Blobs to File objects
     const convertBlobToFile = async (blob: Blob, prefix: string): Promise<File> => {
-      const arrayBuffer = await blob.arrayBuffer();
-      const fileType = blob.type || 'audio/wav';
+      const timestamp = Date.now();
+      const fileName = `${prefix}_${timestamp}.wav`;
       return new File(
-        [arrayBuffer], 
-        `${prefix}_${Date.now()}.wav`,
-        { type: fileType, lastModified: Date.now() }
+        [blob],
+        fileName,
+        { type: blob.type || 'audio/wav', lastModified: timestamp }
       );
     };
 
+    // Convert blobs to files
     const microphoneFile = await convertBlobToFile(microphoneBlob, 'microphone');
     const systemFile = await convertBlobToFile(systemBlob, 'system');
     const combinedFile = combinedBlob ? await convertBlobToFile(combinedBlob, 'combined') : null;
 
-    // Save recordings with converted File objects
-    const result = await saveRecording(
-      sessionId,
-      microphoneFile,
-      systemFile,
-      combinedFile,
-      user.id
-    );
+    // Upload files to Appwrite storage
+    console.log(`Uploading microphone recording: ${microphoneFile.name}`);
+    const microphoneFileId = await uploadFileToAppwrite(microphoneFile, microphoneFile.name);
 
+    console.log(`Uploading system recording: ${systemFile.name}`);
+    const systemFileId = await uploadFileToAppwrite(systemFile, systemFile.name);
+
+    // Upload combined file if available
+    let combinedFileId: string | null = null;
+    if (combinedFile) {
+      console.log(`Uploading combined recording: ${combinedFile.name}`);
+      combinedFileId = await uploadFileToAppwrite(combinedFile, combinedFile.name);
+    }
+
+    // Save recording to database
+    const recording = await prisma.recording.create({
+      data: {
+        appwriteId: sessionId,
+        name: `Recording ${new Date().toLocaleString()}`,
+        duration: 0, // TODO: Calculate actual duration from audio file
+        microphoneAudioFileId: microphoneFileId,
+        systemAudioFileId: systemFileId,
+        combinedAudioFileId: combinedFileId,
+        userId: user.id
+      }
+    });
+
+    // Construct file URLs
+    const baseUrl = new URL(req.url).origin;
+    
     return NextResponse.json({
       success: true,
-      result
+      result: {
+        id: recording.id,
+        sessionId: recording.appwriteId,
+        timestamp: recording.createdAt.toISOString(),
+        name: recording.name,
+        duration: recording.duration,
+        microphoneAudio: `${baseUrl}/api/storage/file/${microphoneFileId}`,
+        systemAudio: `${baseUrl}/api/storage/file/${systemFileId}`,
+        combinedAudio: combinedFileId ? `${baseUrl}/api/storage/file/${combinedFileId}` : null
+      },
+      message: 'Recording saved successfully'
     });
-  } catch (error) {
-    console.error('Error saving recording:', error);
-    return NextResponse.json(
-      { error: 'Failed to save recording' },
-      { status: 500 }
-    );
-  }
+  });
 }

@@ -11,19 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { AudioPlayer } from "../AudioPlayer";
 import { toast } from 'sonner';
-import { useAuth } from '@/lib/auth-context';
+import { apiClient, Recording } from '@/lib/api-client';
 import { getCookie, AUTH_COOKIE_NAME } from '@/lib/cookies';
-
-interface Recording {
-  id: string;
-  sessionId: string;
-  timestamp: string;
-  name: string;
-  duration: number;
-  microphoneAudio: string;
-  systemAudio: string;
-  combinedAudio: string | null;
-}
 
 interface RecordingsListProps {
   onRefresh?: () => void;
@@ -33,8 +22,6 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedAudio, setSelectedAudio] = useState<{ url: string; label: string } | null>(null);
-  const { user } = useAuth();
-  const authToken = getCookie(AUTH_COOKIE_NAME);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const limit = 10;
 
@@ -55,35 +42,27 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
     try {
       setLoading(true);
       
-      if (!authToken) {
-        toast.error('Please log in to view recordings');
+      const token = getCookie(AUTH_COOKIE_NAME);
+      if (!token) {
+        toast.error('Not authenticated');
+        setLoading(false);
         return;
       }
 
-      const url = new URL('/api/recordings', window.location.origin);
-      if (cursor) {
-        url.searchParams.append('cursor', cursor);
-      }
-      url.searchParams.append('limit', limit.toString());
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
+      const response = await apiClient.getRecordings({ 
+        cursor,
+        limit
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch recordings');
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to fetch recordings');
       }
 
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch recordings');
-      }
-
-      setRecordings(cursor ? [...recordings, ...data.recordings] : data.recordings);
-      setNextCursor(data.nextCursor);
+      setRecordings(cursor 
+        ? [...recordings, ...response.data.recordings] 
+        : response.data.recordings
+      );
+      setNextCursor(response.data.nextCursor);
     } catch (error) {
       console.error('Error fetching recordings:', error);
       toast.error('Failed to load recordings');
@@ -102,11 +81,6 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
   // Delete recording
   const handleDelete = async (id: string) => {
     try {
-      if (!authToken) {
-        toast.error('Please log in to delete recordings');
-        return;
-      }
-
       // Close dialog if the deleted recording is currently selected
       const recordingToDelete = recordings.find(rec => rec.id === id);
       if (selectedAudio && recordingToDelete) {
@@ -119,24 +93,14 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
         }
       }
 
-      const deletePromise = fetch(`/api/recordings?id=${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      }).then(async (response) => {
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to delete recording');
-        }
-        return response.json();
-      });
+      // Call API to delete recording
+      const deletePromise = apiClient.deleteRecording(id);
 
       // Show loading toast that resolves with the deletion
       await toast.promise(deletePromise, {
         loading: 'Deleting recording...',
         success: 'Recording deleted successfully',
-        error: (err) => err.message || 'Failed to delete recording'
+        error: (err) => err.error || 'Failed to delete recording'
       });
 
       // Update state after successful deletion
@@ -153,7 +117,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
 
   // Download audio
   const handleDownload = (url: string, fileName: string) => {
-    // Create temporary link
+    // Create a link and trigger download
     const a = document.createElement('a');
     a.href = url;
     a.download = fileName;
@@ -162,12 +126,10 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
     document.body.removeChild(a);
   };
 
-  // Load recordings on mount and when token changes
+  // Load recordings on mount
   useEffect(() => {
-    if (authToken) {
-      fetchRecordings();
-    }
-  }, [authToken]);
+    fetchRecordings();
+  }, []);
 
   return (
     <div className="mt-8">

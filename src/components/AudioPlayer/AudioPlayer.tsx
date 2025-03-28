@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download, Play, Pause, Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiClient } from '@/lib/api-client';
 
 interface AudioPlayerProps {
   src: string;
@@ -100,14 +101,58 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const handleDownload = () => {
-    const link = document.createElement('a');
-    link.href = src;
-    link.download = label.replace(/\s+/g, '_').toLowerCase() + '.wav';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Download started');
+  // Handle audio loading with authentication
+  const loadAudioWithAuth = async () => {
+    try {
+      const response = await fetch(src, apiClient.getAuthenticatedFetchOptions());
+      if (!response.ok) {
+        throw new Error('Failed to load audio file');
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      
+      if (audioRef.current) {
+        audioRef.current.src = objectUrl;
+      }
+    } catch (error) {
+      console.error('Error loading audio:', error);
+      toast.error('Failed to load audio file');
+    }
+  };
+
+  // Load audio with authentication when component mounts or src changes
+  useEffect(() => {
+    loadAudioWithAuth();
+    
+    // Cleanup object URL on unmount or src change
+    return () => {
+      if (audioRef.current?.src) {
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+    };
+  }, [src]);
+
+  // Update download handler to use authenticated fetch
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(src, apiClient.getAuthenticatedFetchOptions());
+      if (!response.ok) {
+        throw new Error('Failed to download file');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = label.replace(/\s+/g, '_').toLowerCase() + '.wav';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Download started');
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      toast.error('Failed to download file');
+    }
   };
 
   return (
@@ -130,7 +175,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       <CardContent className="space-y-4">
         <audio 
           ref={audioRef}
-          src={src} 
           className="hidden"
           onError={() => toast.error('Failed to load audio file')}
         />

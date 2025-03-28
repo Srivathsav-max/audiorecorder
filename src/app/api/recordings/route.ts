@@ -1,22 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAudioFileUrl } from "@/lib/recording-service";
 import { getUserFromToken } from "@/lib/auth";
+import { handleApiError, ApiError, withErrorHandling } from "@/lib/error-handler";
 
+/**
+ * GET /api/recordings
+ * 
+ * Fetches recordings with pagination
+ */
 export async function GET(req: NextRequest) {
-  try {
+  return withErrorHandling(async () => {
+    // Authenticate user
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      throw new ApiError('Unauthorized', 401);
     }
 
     const token = authHeader.split(' ')[1];
     const user = await getUserFromToken(token);
 
+    // Parse query parameters
     const searchParams = req.nextUrl.searchParams;
     const cursor = searchParams.get('cursor');
     const limit = parseInt(searchParams.get('limit') || '10');
 
+    // Validate limit
+    if (isNaN(limit) || limit < 1 || limit > 100) {
+      throw new ApiError('Invalid limit parameter, must be between 1 and 100', 400);
+    }
+
+    // Fetch recordings with pagination
     const recordings = await prisma.recording.findMany({
       where: {
         userId: user.id,
@@ -28,19 +41,21 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    // Determine next cursor for pagination
     const nextCursor = recordings.length === limit ? recordings[recordings.length - 1].id : null;
 
     // Map recordings to include audio URLs
+    const baseUrl = new URL(req.url).origin;
     const mappedRecordings = recordings.map(recording => ({
       id: recording.id,
       sessionId: recording.appwriteId,
-      timestamp: recording.createdAt,
+      timestamp: recording.createdAt.toISOString(),
       name: recording.name,
       duration: recording.duration,
-      microphoneAudio: getAudioFileUrl(recording.microphoneAudioFileId),
-      systemAudio: getAudioFileUrl(recording.systemAudioFileId),
-      combinedAudio: recording.combinedAudioFileId 
-        ? getAudioFileUrl(recording.combinedAudioFileId)
+      microphoneAudio: `${baseUrl}/api/storage/file/${recording.microphoneAudioFileId}`,
+      systemAudio: `${baseUrl}/api/storage/file/${recording.systemAudioFileId}`,
+      combinedAudio: recording.combinedAudioFileId
+        ? `${baseUrl}/api/storage/file/${recording.combinedAudioFileId}`
         : null,
     }));
 
@@ -49,64 +64,58 @@ export async function GET(req: NextRequest) {
       recordings: mappedRecordings,
       nextCursor,
     });
-  } catch (error) {
-    console.error('Error fetching recordings:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch recordings' },
-      { status: 500 }
-    );
-  }
+  });
 }
 
+/**
+ * DELETE /api/recordings?id={id}
+ * 
+ * Deletes a recording
+ */
 export async function DELETE(req: NextRequest) {
-  try {
+  return withErrorHandling(async () => {
+    // Authenticate user
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      throw new ApiError('Unauthorized', 401);
     }
 
     const token = authHeader.split(' ')[1];
     const user = await getUserFromToken(token);
 
+    // Get recording ID from query parameters
     const searchParams = req.nextUrl.searchParams;
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json(
-        { error: 'Recording ID is required' },
-        { status: 400 }
-      );
+      throw new ApiError('Recording ID is required', 400);
     }
 
-    // Verify ownership
+    // Verify recording exists and belongs to user
     const recording = await prisma.recording.findUnique({
       where: { id }
     });
 
     if (!recording) {
-      return NextResponse.json(
-        { error: 'Recording not found' },
-        { status: 404 }
-      );
+      throw new ApiError('Recording not found', 404);
     }
 
     if (recording.userId !== user.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 403 }
-      );
+      throw new ApiError('You do not have permission to delete this recording', 403);
     }
 
+    // Delete recording
     await prisma.recording.delete({
       where: { id }
     });
 
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting recording:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete recording' },
-      { status: 500 }
-    );
-  }
+    // TODO: Delete files from Appwrite storage
+    // This would be handled by a background job or a separate API call
+    // to avoid blocking the response
+
+    return NextResponse.json({ 
+      success: true,
+      message: 'Recording deleted successfully'
+    });
+  });
 }
