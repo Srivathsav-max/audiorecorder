@@ -25,10 +25,11 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - public files (images, etc)
      */
     '/',
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
     '/login',
-    '/register'
+    '/register',
+    '/((?!api|_next/static|_next/image|favicon.ico|watchrx-logo-new.png|file.svg|globe.svg|microphone.svg|next.svg|vercel.svg|window.svg).*)'
   ],
 };

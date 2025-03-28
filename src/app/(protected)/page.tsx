@@ -4,43 +4,44 @@ import React from 'react';
 import { AudioRecordingSystem } from '@/components/AudioRecordingSystem';
 import { OfflineState } from '@/components/OfflineState';
 import { useNetwork } from '@/components/NetworkStatus';
-import Image from 'next/image';
+import { useAuth } from '@/lib/auth-context';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function HomePage() {
   const { isOnline } = useNetwork();
+  const { user } = useAuth();
+
   return (
-    <main className="min-h-screen p-6 sm:p-10">
-      <div className="max-w-4xl mx-auto p-5 sm:p-8">
-        {/* Hero Section */}
-        <div className="relative rounded-2xl p-8 mb-12">
-          <div className="flex flex-col items-center text-center">
-            <Image
-              src="/watchrx-logo-new.png"
-              alt="WatchRX Logo"
-              width={200}
-              height={60}
-              className="mb-6 drop-shadow-sm"
-              priority
-            />
-
-            <h1 className="text-3xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
-              Healthcare Communication Recorder
-            </h1>
-
-            <p className="text-muted-foreground max-w-2xl text-base leading-relaxed">
-              Enterprise-grade dual audio capture system designed for healthcare professionals.
-              Securely records and archives communication sessions with integrated system and microphone audio.
+    <div className="container max-w-7xl mx-auto p-6 sm:p-8">
+      {/* Welcome Section */}
+      <section className="mb-8">
+        <Card className="bg-gradient-to-r from-muted/30 to-background border-border/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-3xl font-bold">
+              Welcome, {user?.name || 'Healthcare Professional'}
+            </CardTitle>
+            <CardDescription className="text-base">
+              Securely record and archive communication sessions with integrated system and microphone audio.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              This enterprise-grade platform provides a secure environment for capturing and storing audio communications
+              for healthcare professionals. All recordings are encrypted and stored securely, with access controls in place
+              to ensure patient privacy and compliance with healthcare regulations.
             </p>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+      </section>
 
-        {/* Conditional Render based on Network Status */}
+      {/* Recorder Section */}
+      <section>
         {isOnline ? (
           <AudioRecordingSystem />
         ) : (
           <OfflineState />
         )}
-      </div>
-    </main>
+      </section>
+    </div>
   );
 }

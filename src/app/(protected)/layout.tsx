@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { Header } from "@/components/Header";
+import { Loader2 } from "lucide-react";
 
 export default function ProtectedLayout({
   children,
@@ -21,7 +23,10 @@ export default function ProtectedLayout({
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -30,5 +35,12 @@ export default function ProtectedLayout({
     return null;
   }
 
-  return children;
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Header />
+      <main className="flex-1">
+        {children}
+      </main>
+    </div>
+  );
 }
