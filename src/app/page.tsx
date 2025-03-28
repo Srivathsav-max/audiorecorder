@@ -2,9 +2,12 @@
 
 import React from 'react';
 import { AudioRecordingSystem } from '@/components/AudioRecordingSystem';
+import { OfflineState } from '@/components/OfflineState';
+import { useNetwork } from '@/components/NetworkStatus';
 import Image from 'next/image';
 
 export default function Home() {
+  const { isOnline } = useNetwork();
   return (
     <main className="min-h-screen p-6 sm:p-10">
       <div className="max-w-4xl mx-auto p-5 sm:p-8">
@@ -31,8 +34,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Audio Recording System */}
-        <AudioRecordingSystem />
+        {/* Conditional Render based on Network Status */}
+        {isOnline ? (
+          <AudioRecordingSystem />
+        ) : (
+          <OfflineState />
+        )}
       </div>
     </main>
   );
