@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromToken } from "@/lib/auth";
-import { handleApiError, ApiError, withErrorHandling } from "@/lib/error-handler";
+import { ApiError, withErrorHandling } from "@/lib/error-handler";
 
 /**
  * GET /api/recordings

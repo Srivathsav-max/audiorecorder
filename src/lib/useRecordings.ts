@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { apiClient, Recording, ApiResponse } from '@/lib/api-client';
+import { apiClient, Recording } from '@/lib/api-client';
 
 export function useRecordings(initialLimit: number = 10) {
   const [recordings, setRecordings] = useState<Recording[]>([]);

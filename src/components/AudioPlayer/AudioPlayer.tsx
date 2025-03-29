@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,7 +102,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   };
 
   // Handle audio loading with authentication
-  const loadAudioWithAuth = async () => {
+  const loadAudioWithAuth = useCallback(async () => {
     try {
       const response = await fetch(src, apiClient.getAuthenticatedFetchOptions());
       if (!response.ok) {
@@ -118,19 +118,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       console.error('Error loading audio:', error);
       toast.error('Failed to load audio file');
     }
-  };
+  }, [src]);
 
   // Load audio with authentication when component mounts or src changes
   useEffect(() => {
     loadAudioWithAuth();
     
     // Cleanup object URL on unmount or src change
+    const audio = audioRef.current;
     return () => {
-      if (audioRef.current?.src) {
-        URL.revokeObjectURL(audioRef.current.src);
+      if (audio?.src) {
+        URL.revokeObjectURL(audio.src);
       }
     };
-  }, [src]);
+  }, [src, loadAudioWithAuth]);
 
   // Update download handler to use authenticated fetch
   const handleDownload = async () => {

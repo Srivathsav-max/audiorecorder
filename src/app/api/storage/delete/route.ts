@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { storage, APPWRITE_STORAGE_BUCKET_ID } from "@/lib/appwrite";
 import { getUserFromToken } from "@/lib/auth";
-import { handleApiError, ApiError, withErrorHandling } from "@/lib/error-handler";
+import { ApiError, withErrorHandling } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
 
 /**

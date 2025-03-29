@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Trash2, Download } from "lucide-react";
 import {
@@ -16,6 +16,24 @@ import { getCookie, AUTH_COOKIE_NAME } from '@/lib/cookies';
 
 interface RecordingsListProps {
   onRefresh?: () => void;
+}
+
+interface RecordingsResponse {
+  recordings: Recording[];
+  nextCursor: string | null;
+}
+
+// Type guard
+function isValidRecordingsResponse(data: unknown): data is RecordingsResponse {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'recordings' in data &&
+    'nextCursor' in data &&
+    Array.isArray((data as RecordingsResponse).recordings) &&
+    ((data as RecordingsResponse).nextCursor === null || 
+     typeof (data as RecordingsResponse).nextCursor === 'string')
+  );
 }
 
 export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => {
@@ -38,7 +56,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
   };
 
   // Fetch recordings from the API
-  const fetchRecordings = async (cursor?: string) => {
+  const fetchRecordings = useCallback(async (cursor?: string) => {
     try {
       setLoading(true);
       
@@ -58,18 +76,25 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
         throw new Error(response.error || 'Failed to fetch recordings');
       }
 
-      setRecordings(cursor 
-        ? [...recordings, ...response.data.recordings] 
-        : response.data.recordings
+      if (!isValidRecordingsResponse(response.data)) {
+        throw new Error('Invalid response data format');
+      }
+
+      const { recordings: newRecordings, nextCursor: newCursor } = response.data;
+      
+      setRecordings(prevRecordings => cursor 
+        ? [...prevRecordings, ...newRecordings] 
+        : newRecordings
       );
-      setNextCursor(response.data.nextCursor);
+      setNextCursor(newCursor);
+
     } catch (error) {
       console.error('Error fetching recordings:', error);
       toast.error('Failed to load recordings');
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // No dependencies needed as apiClient and limit are stable
 
   // Load more recordings
   const loadMore = () => {
@@ -104,7 +129,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
       });
 
       // Update state after successful deletion
-      setRecordings(recordings.filter(rec => rec.id !== id));
+      setRecordings(prev => prev.filter(rec => rec.id !== id));
 
       // Trigger optional refresh callback
       if (onRefresh) {
@@ -129,7 +154,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
   // Load recordings on mount
   useEffect(() => {
     fetchRecordings();
-  }, []);
+  }, [fetchRecordings]);
 
   return (
     <div className="mt-8">

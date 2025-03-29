@@ -1,6 +1,5 @@
 import { Client, Storage, Databases, ID, RealtimeResponseEvent } from 'appwrite';
 import type { AudioFileDocument, CreateAudioDocument } from './appwrite';
-import { ostring } from 'zod';
 
 class NetworkAwareClient {
   private client: Client;

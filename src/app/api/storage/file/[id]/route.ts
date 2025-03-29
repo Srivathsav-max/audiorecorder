@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { storage, APPWRITE_STORAGE_BUCKET_ID } from "@/lib/appwrite";
+import { storageService } from "@/lib/appwrite";
 import { getUserFromToken } from "@/lib/auth";
 import { withRouteErrorHandling } from "@/lib/error-handler";
 import { AuthError, StorageError } from "@/lib/error-handler";
@@ -11,18 +11,12 @@ import { AuthError, StorageError } from "@/lib/error-handler";
  * This endpoint acts as a proxy to Appwrite storage, 
  * allowing us to keep Appwrite credentials on the server only.
  */
-interface FileRouteContext {
-  params: {
-    id: string;
-  };
-}
-
 async function getStorageFile(
   req: NextRequest,
-  context: FileRouteContext
+  { params }: { params: Promise<{ id: string }> }
 ) {
   // Get file ID from params
-  const { id } = context.params;
+  const { id } = await params;
 
   // Authenticate user
   const authHeader = req.headers.get('authorization');
@@ -34,11 +28,11 @@ async function getStorageFile(
   await getUserFromToken(token);
 
   try {
-    // Get the file view URL from Appwrite
-    const fileView = storage.getFileView(APPWRITE_STORAGE_BUCKET_ID, id);
+    // Get the file preview URL from Appwrite using storageService
+    const filePreviewUrl = storageService.getFilePreview(id);
     
     // Fetch the file using the URL to proxy it
-    const fileResponse = await fetch(fileView.toString());
+    const fileResponse = await fetch(filePreviewUrl);
     
     if (!fileResponse.ok) {
       throw new StorageError(
@@ -71,4 +65,4 @@ async function getStorageFile(
   }
 }
 
-export const GET = withRouteErrorHandling<NextResponse, [NextRequest, FileRouteContext]>(getStorageFile);
+export const GET = withRouteErrorHandling<NextResponse, [NextRequest, { params: Promise<{ id: string }> }]>(getStorageFile);

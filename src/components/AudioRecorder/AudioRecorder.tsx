@@ -4,7 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { AudioRecorderProps, RecordedAudio, AudioDevice } from './types';
+import { AudioRecorderProps, AudioDevice } from './types';
 import { DeviceSelector } from './DeviceSelector';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import {

@@ -65,7 +65,12 @@ export function RegisterForm() {
       toast.success("Account created successfully");
       router.push("/");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create account");
+      // Check for registration disabled error
+      if (error instanceof Error && error.message.includes('registration is currently disabled')) {
+        toast.error("New account registration is currently disabled by the administrator. Please contact support for assistance.");
+      } else {
+        toast.error(error instanceof Error ? error.message : "Failed to create account");
+      }
     } finally {
       setIsLoading(false);
     }

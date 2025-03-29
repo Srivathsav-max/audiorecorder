@@ -32,13 +32,13 @@ export function OfflineState() {
           <div className="p-4 rounded-lg bg-background border">
             <h3 className="font-medium mb-1">Try mobile data</h3>
             <p className="text-sm text-muted-foreground">
-              If Wi-Fi isn't available, switch to mobile data if possible.
+              If Wi-Fi isn&apos;t available, switch to mobile data if possible.
             </p>
           </div>
           <div className="p-4 rounded-lg bg-background border">
             <h3 className="font-medium mb-1">Restart your router</h3>
             <p className="text-sm text-muted-foreground">
-              If you're at a fixed location, try restarting your network equipment.
+              If you&apos;re at a fixed location, try restarting your network equipment.
             </p>
           </div>
         </div>

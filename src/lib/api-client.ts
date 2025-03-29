@@ -79,18 +79,10 @@ class ApiClient {
         }
       });
 
-      let headers: Record<string, string>;
-      try {
-        headers = {
-          ...this.getAuthHeader(),
-          'Content-Type': 'application/json'
-        } as Record<string, string>;
-      } catch (authError) {
-        return {
-          success: false,
-          error: 'Authentication required'
-        };
-      }
+      const headers = {
+        ...this.getAuthHeader(),
+        'Content-Type': 'application/json'
+      } as Record<string, string>;
       
       const response = await fetch(url.toString(), {
         method: 'GET',
@@ -126,15 +118,7 @@ class ApiClient {
     try {
       const url = `${this.baseUrl}${endpoint}`;
       
-      let headers: Record<string, string>;
-      try {
-        headers = this.getAuthHeader() as Record<string, string>;
-      } catch (authError) {
-        return {
-          success: false,
-          error: 'Authentication required'
-        };
-      }
+      const headers = this.getAuthHeader() as Record<string, string>;
       
       // Handle FormData vs JSON
       const isFormData = data instanceof FormData;
@@ -184,15 +168,7 @@ class ApiClient {
         }
       });
 
-      let headers: Record<string, string>;
-      try {
-        headers = this.getAuthHeader() as Record<string, string>;
-      } catch (authError) {
-        return {
-          success: false,
-          error: 'Authentication required'
-        };
-      }
+      const headers = this.getAuthHeader() as Record<string, string>;
       
       const response = await fetch(url.toString(), {
         method: 'DELETE',

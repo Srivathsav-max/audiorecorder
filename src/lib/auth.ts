@@ -22,8 +22,12 @@ export async function createUser(email: string, password: string, name?: string)
     },
   });
 
-  const { password: _, ...userWithoutPassword } = user;
-  return userWithoutPassword;
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role
+  };
 }
 
 export async function verifyUser(email: string, password: string) {
@@ -40,8 +44,12 @@ export async function verifyUser(email: string, password: string) {
     throw new Error('Invalid credentials');
   }
 
-  const { password: _, ...userWithoutPassword } = user;
-  return userWithoutPassword;
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role
+  };
 }
 
 export function generateToken(user: AuthUser) {
@@ -75,6 +83,10 @@ export async function getUserFromToken(token: string) {
     throw new Error('User not found');
   }
 
-  const { password: _, ...userWithoutPassword } = user;
-  return userWithoutPassword;
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role
+  };
 }
