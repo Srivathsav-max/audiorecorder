@@ -10,7 +10,7 @@ const APPWRITE_ENDPOINT = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT as string;
 const APPWRITE_PROJECT_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID as string;
 const APPWRITE_DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID as string;
 const APPWRITE_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_ID as string;
-const APPWRITE_STORAGE_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_STORAGE_BUCKET_ID as string;
+export const APPWRITE_STORAGE_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_STORAGE_BUCKET_ID as string;
 
 // Create Appwrite client
 const client = new Client();
@@ -37,20 +37,73 @@ export type CreateAudioDocument = Omit<AudioFileDocument, '$id' | '$createdAt'>;
 // Storage service
 export const storageService = {
   // Upload a file to Appwrite storage
-  uploadFile: async (file: Blob, filename: string): Promise<string> => {
+  uploadFile: async (file: File, filename: string): Promise<string> => {
     try {
-      // Convert Blob to File object (required by Appwrite)
-      const fileObj = new File([file], filename, { type: file.type });
-      
-      const result = await storage.createFile(
-        APPWRITE_STORAGE_BUCKET_ID,
-        ID.unique(),
-        fileObj
-      );
-      return result.$id;
+      // Input validation
+      if (!file) {
+        throw new Error('Invalid file input: File is required');
+      }
+
+      // Validate file size (Appwrite has a 100MB limit by default)
+      const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error(`File size exceeds maximum limit of ${MAX_FILE_SIZE} bytes`);
+      }
+
+      // Create unique ID for the file
+      const fileId = ID.unique();
+
+      // Server-side environment (Node.js/Next.js API route)
+      if (typeof window === 'undefined') {
+        try {
+          // For Node.js environments, dynamically import node-appwrite
+          const nodeAppwrite = await import('node-appwrite');
+          const { Client: NodeClient, Storage: NodeStorage, InputFile } = nodeAppwrite;
+          
+          // Initialize node-appwrite client
+          const nodeClient = new NodeClient()
+            .setEndpoint(APPWRITE_ENDPOINT)
+            .setProject(APPWRITE_PROJECT_ID);
+            
+          // Create storage instance
+          const nodeStorage = new NodeStorage(nodeClient);
+          
+          // Convert the file to an ArrayBuffer and buffer
+          const arrayBuffer = await file.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          
+          // Create an InputFile instance from the buffer
+          const inputFile = InputFile.fromBuffer(buffer, filename || file.name);
+          
+          // Upload the file using node-appwrite
+          const result = await nodeStorage.createFile(
+            APPWRITE_STORAGE_BUCKET_ID,
+            fileId,
+            inputFile
+          );
+          
+          return result.$id;
+        } catch (nodeError) {
+          console.error('Error using node-appwrite for file upload:', nodeError);
+          throw nodeError;
+        }
+      } else {
+        // Client-side environment (browser)
+        // Use the browser-side Appwrite SDK for client uploads
+        const result = await storage.createFile(
+          APPWRITE_STORAGE_BUCKET_ID,
+          fileId,
+          file
+        );
+
+        return result.$id;
+      }
     } catch (error) {
       console.error('Error uploading file to Appwrite:', error);
-      throw error;
+      if (error instanceof Error) {
+        throw new Error(`File upload failed: ${error.message}`);
+      }
+      throw new Error('Unknown error occurred during file upload');
     }
   },
 
@@ -59,7 +112,7 @@ export const storageService = {
     return storage.getFileView(
       APPWRITE_STORAGE_BUCKET_ID,
       fileId
-    ).href;
+    ).toString();
   },
 
   // Delete file from storage

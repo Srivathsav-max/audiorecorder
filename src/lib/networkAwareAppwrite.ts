@@ -147,7 +147,7 @@ export const storageService = {
     return networkAwareStorage.getFileView(
       process.env.NEXT_PUBLIC_APPWRITE_STORAGE_BUCKET_ID!,
       fileId
-    ).href;
+    ).toString();
   },
 
   deleteFile: async (fileId: string): Promise<void> => {

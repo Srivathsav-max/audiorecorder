@@ -1,0 +1,49 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  name      String?
+  role      String     @default("USER") // Changed from nullable to required with default
+  password  String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  recordings Recording[]
+}
+
+model Recording {
+  id                  String    @id @default(uuid())
+  appwriteId          String    @unique
+  name                String
+  duration            Float
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  userId              String
+  user                User      @relation(fields: [userId], references: [id])
+  microphoneAudioFileId String
+  systemAudioFileId     String
+  combinedAudioFileId   String?
+
+  @@index([userId])
+}
+
+model AppSettings {
+  id                  String    @id @default("app-settings")
+  registrationEnabled Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}

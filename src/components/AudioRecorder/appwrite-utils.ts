@@ -5,7 +5,8 @@ import { getFormattedDateTime } from './utils';
 export const saveAudioFileToAppwrite = async (blob: Blob, filename: string): Promise<string> => {
   try {
     console.log(`Saving ${filename} to Appwrite (size: ${blob.size} bytes, type: ${blob.type})`);
-    const fileId = await storageService.uploadFile(blob, filename);
+    const file = new File([blob], filename, { type: blob.type });
+    const fileId = await storageService.uploadFile(file, filename);
     console.log(`Successfully saved ${filename} to Appwrite, file ID: ${fileId}`);
     return fileId;
   } catch (error) {

@@ -4,7 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { AudioRecorderProps, RecordedAudio, AudioDevice } from './types';
+import { AudioRecorderProps, AudioDevice } from './types';
 import { DeviceSelector } from './DeviceSelector';
 import { WaveformVisualizer } from './WaveformVisualizer';
 import {
@@ -13,7 +13,7 @@ import {
   checkBrowserSupport,
   convertToHighQualityWav
 } from './utils';
-import { saveRecordingToAppwrite } from './appwrite-utils';
+import { saveRecordingToServer } from './recording-service';
 
 export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   onRecordingStart,
@@ -245,34 +245,24 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         toast.error('Could not create combined audio stream');
       }
 
-      // Save to Appwrite
+      // Save recording
       try {
-        const result = await saveRecordingToAppwrite(
+        const result = await saveRecordingToServer(
           sessionId,
           microphoneWavBlob,
           systemWavBlob,
           combinedWavBlob
         );
 
-        // Create result
-        const recordings: RecordedAudio = {
-          microphoneAudio: result.microphoneAudioUrl,
-          systemAudio: result.systemAudioUrl,
-          combinedAudio: result.combinedAudioUrl,
-          timestamp: Date.now(),
-          format: 'wav',
-          documentId: result.documentId
-        };
-
         if (onRecordingStop) {
-          onRecordingStop(recordings);
+          onRecordingStop(result);
         }
 
-        toast.success("Recording saved to Appwrite");
-        return recordings;
+        toast.success("Recording saved successfully");
+        return result;
       } catch (error) {
-        console.error('Error saving to Appwrite:', error);
-        toast.error('Failed to save recording to Appwrite');
+        console.error('Error saving recording:', error);
+        toast.error('Failed to save recording');
       } finally {
         // Reset state
         setIsProcessing(false);

@@ -1,23 +1,57 @@
 'use client';
 
+import { WifiOff, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+
 export function OfflineState() {
+  const handleRefresh = () => {
+    window.location.reload();
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
-      <div className="max-w-md space-y-4">
-        <div className="text-red-500 text-6xl mb-6">⚠️</div>
-        <h1 className="text-2xl font-semibold">No Internet Connection</h1>
-        <p className="text-gray-500">
-          Audio recording features are not available while offline. Please check your internet connection and try again.
-        </p>
-        <div className="mt-8 p-4 bg-gray-50 rounded-lg border text-sm text-gray-600">
-          <p>Why do we need internet?</p>
-          <ul className="mt-2 list-disc list-inside text-left space-y-1">
-            <li>To securely store your recordings</li>
-            <li>For real-time data synchronization</li>
-            <li>To ensure data integrity and backup</li>
-          </ul>
+    <Card className="border-destructive/30 bg-destructive/5">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <WifiOff className="h-5 w-5 text-destructive" />
+          <CardTitle className="text-destructive">You are offline</CardTitle>
         </div>
-      </div>
-    </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-muted-foreground">
+          An internet connection is required to record and access your files. 
+          Please check your network connection and try again.
+        </p>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 rounded-lg bg-background border">
+            <h3 className="font-medium mb-1">Check your Wi-Fi</h3>
+            <p className="text-sm text-muted-foreground">
+              Make sure your device is connected to a working Wi-Fi network.
+            </p>
+          </div>
+          <div className="p-4 rounded-lg bg-background border">
+            <h3 className="font-medium mb-1">Try mobile data</h3>
+            <p className="text-sm text-muted-foreground">
+              If Wi-Fi isn&apos;t available, switch to mobile data if possible.
+            </p>
+          </div>
+          <div className="p-4 rounded-lg bg-background border">
+            <h3 className="font-medium mb-1">Restart your router</h3>
+            <p className="text-sm text-muted-foreground">
+              If you&apos;re at a fixed location, try restarting your network equipment.
+            </p>
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button 
+          onClick={handleRefresh}
+          className="gap-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh Page
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
