@@ -1,31 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { storage, APPWRITE_STORAGE_BUCKET_ID } from "@/lib/appwrite";
-import { ID } from "appwrite";
+import { storageService } from "@/lib/appwrite";
 import { ApiError, withErrorHandling } from "@/lib/error-handler";
 
-/**
- * Helper function to upload a file to Appwrite and handle errors
- */
-async function uploadFileToAppwrite(file: File, filename: string): Promise<string> {
-  try {
-    // Create a unique file ID
-    const fileId = ID.unique();
-    
-    // Upload file
-    const result = await storage.createFile(
-      APPWRITE_STORAGE_BUCKET_ID,
-      fileId,
-      file
-    );
-    
-    return result.$id;
-  } catch (error) {
-    console.error(`Error uploading ${filename} to Appwrite:`, error);
-    throw new ApiError(`Error uploading ${filename}`, 500, error);
-  }
-}
 
 /**
  * POST /api/recordings/save
@@ -77,16 +55,16 @@ export async function POST(req: NextRequest) {
 
     // Upload files to Appwrite storage
     console.log(`Uploading microphone recording: ${microphoneFile.name}`);
-    const microphoneFileId = await uploadFileToAppwrite(microphoneFile, microphoneFile.name);
+    const microphoneFileId = await storageService.uploadFile(microphoneFile, microphoneFile.name);
 
     console.log(`Uploading system recording: ${systemFile.name}`);
-    const systemFileId = await uploadFileToAppwrite(systemFile, systemFile.name);
+    const systemFileId = await storageService.uploadFile(systemFile, systemFile.name);
 
     // Upload combined file if available
     let combinedFileId: string | null = null;
     if (combinedFile) {
       console.log(`Uploading combined recording: ${combinedFile.name}`);
-      combinedFileId = await uploadFileToAppwrite(combinedFile, combinedFile.name);
+      combinedFileId = await storageService.uploadFile(combinedFile, combinedFile.name);
     }
 
     // Save recording to database

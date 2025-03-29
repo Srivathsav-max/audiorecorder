@@ -52,70 +52,50 @@ export const storageService = {
 
       // Create unique ID for the file
       const fileId = ID.unique();
-      
+
       // Server-side environment (Node.js/Next.js API route)
       if (typeof window === 'undefined') {
         try {
-          // Convert the file to an ArrayBuffer
+          // For Node.js environments, dynamically import node-appwrite
+          const nodeAppwrite = await import('node-appwrite');
+          const { Client: NodeClient, Storage: NodeStorage, InputFile } = nodeAppwrite;
+          
+          // Initialize node-appwrite client
+          const nodeClient = new NodeClient()
+            .setEndpoint(APPWRITE_ENDPOINT)
+            .setProject(APPWRITE_PROJECT_ID);
+            
+          // Create storage instance
+          const nodeStorage = new NodeStorage(nodeClient);
+          
+          // Convert the file to an ArrayBuffer and buffer
           const arrayBuffer = await file.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
           
-          // Upload using fetch directly instead of Appwrite SDK
-          // This bypasses the problematic File handling in the Appwrite SDK
-          const formData = new FormData();
+          // Create an InputFile instance from the buffer
+          const inputFile = InputFile.fromBuffer(buffer, filename || file.name);
           
-          // Recreate a proper File object from the buffer
-          const blobFile = new Blob([buffer], { type: file.type || 'application/octet-stream' });
-          formData.append('fileId', fileId);
-          formData.append('file', blobFile, filename || file.name);
-          
-          const response = await fetch(`${APPWRITE_ENDPOINT}/storage/buckets/${APPWRITE_STORAGE_BUCKET_ID}/files`, {
-            method: 'POST',
-            headers: {
-              'X-Appwrite-Project': APPWRITE_PROJECT_ID,
-              // Add any required Appwrite authentication headers here
-            },
-            body: formData
-          });
-          
-          if (!response.ok) {
-            const responseData = await response.json();
-            throw new Error(`Appwrite API error: ${responseData.message || response.statusText}`);
-          }
-          
-          const result = await response.json();
-          return result.$id || fileId;
-        } catch (directFetchError) {
-          console.error('Error using direct fetch for file upload:', directFetchError);
-          
-          // Fallback: Try uploading as a simple buffer with raw SDK parameters
-          console.log('Trying alternative direct buffer upload...');
-          
-          // Convert the file to a buffer
-          const arrayBuffer = await file.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          
-          // Create file directly with raw buffer
-          const result = await storage.createFile(
+          // Upload the file using node-appwrite
+          const result = await nodeStorage.createFile(
             APPWRITE_STORAGE_BUCKET_ID,
             fileId,
-            // @ts-ignore - Force the buffer to be accepted
-            buffer,
-            filename || file.name,
-            { contentType: file.type || 'application/octet-stream' }
+            inputFile
           );
           
           return result.$id;
+        } catch (nodeError) {
+          console.error('Error using node-appwrite for file upload:', nodeError);
+          throw nodeError;
         }
       } else {
         // Client-side environment (browser)
-        // Use the File object directly as it should work in browsers
+        // Use the browser-side Appwrite SDK for client uploads
         const result = await storage.createFile(
           APPWRITE_STORAGE_BUCKET_ID,
           fileId,
           file
         );
-        
+
         return result.$id;
       }
     } catch (error) {
