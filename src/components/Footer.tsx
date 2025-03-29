@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { Headphones, Heart, Globe, Mail, Shield } from 'lucide-react';
+import { Heart, Shield } from 'lucide-react';
 
 export function Footer() {
   const { user } = useAuth();
