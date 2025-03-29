@@ -14,6 +14,7 @@ export function Footer() {
     <footer className="w-full border-t bg-background/75 backdrop-blur-lg">
       <div className="container max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Company Info */}
           <div className="space-y-3">
             <h4 className="text-sm font-medium">Healthcare Communication Recorder</h4>
             <p className="text-xs text-muted-foreground">
@@ -25,81 +26,13 @@ export function Footer() {
               <span className="text-xs">Made with care for healthcare professionals</span>
             </div>
           </div>
-          
-          <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Resources</h4>
-              <ul className="space-y-2">
-                <li>
-                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    Help Center
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    Privacy Policy
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    Terms of Service
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Product</h4>
-              <ul className="space-y-2">
-                <li>
-                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    Features
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    Compliance
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    Security
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Contact</h4>
-              <ul className="space-y-2">
-                <li className="flex items-center space-x-2">
-                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    support@watchrx.com
-                  </span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    www.watchrx.com
-                  </span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <Headphones className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    24/7 Support
-                  </span>
-                </li>
-              </ul>
-            </div>
-          </div>
         </div>
-        
+
+        {/* Bottom Bar */}
         <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between mt-8 pt-6 border-t">
           <p className="text-xs text-muted-foreground mt-4 sm:mt-0">
-            &copy; {currentYear} WatchRX Inc. All rights reserved.
+            © {currentYear} Healthcare Communication Recorder. All rights reserved.
           </p>
-          
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-1">
               <Shield className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
