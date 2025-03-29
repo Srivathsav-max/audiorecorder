@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { Heart, Shield } from 'lucide-react';
 
