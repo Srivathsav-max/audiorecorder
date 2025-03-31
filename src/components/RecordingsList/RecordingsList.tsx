@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Trash2, Download } from "lucide-react";
+import { Trash2, Download, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedAudio, setSelectedAudio] = useState<{ url: string; label: string } | null>(null);
+  const [generatingTranscript, setGeneratingTranscript] = useState<Record<string, boolean>>({});
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const limit = 10;
 
@@ -194,14 +195,83 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
                   <h3 className="font-medium">{recording.name || recording.sessionId}</h3>
                   <p className="text-sm text-muted-foreground">{formatDate(recording.timestamp)}</p>
                 </div>
-                <Button
-                  size="icon"
-                  variant="destructive"
-                  onClick={() => handleDelete(recording.id)}
-                >
-                  <Trash2 size={16} />
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    disabled={generatingTranscript[recording.id]}
+                    onClick={async () => {
+                      try {
+                        setGeneratingTranscript(prev => ({ ...prev, [recording.id]: true }));
+                        // Get authenticated URL
+                        const audioUrl = new URL(recording.combinedAudio || recording.microphoneAudio, window.location.origin).toString();
+                        await toast.promise(
+                          async () => {
+                            const response = await apiClient.generateTranscriptAndSummary(audioUrl);
+                            if (!response.success) {
+                              throw new Error(response.error);
+                            }
+                            // Update the recording with transcript info
+                            setRecordings(prev => prev.map(r => 
+                              r.id === recording.id 
+                                ? { ...r, transcript: response.data }
+                                : r
+                            ));
+                            return response;
+                          },
+                          {
+                            loading: 'Processing audio file...',
+                            success: 'Generated transcript and summary',
+                            error: (err) => err.message || 'Failed to generate transcript'
+                          }
+                        );
+                      } catch (error) {
+                        console.error('Error generating transcript:', error);
+                      } finally {
+                        setGeneratingTranscript(prev => ({ ...prev, [recording.id]: false }));
+                      }
+                    }}
+                  >
+                    <FileText size={16} className={recording.transcript ? 'text-green-500' : ''} />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    onClick={() => handleDelete(recording.id)}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                </div>
               </div>
+
+              {recording.transcript && (
+                <div className="mt-3 p-3 bg-muted/20 rounded-md">
+                  <h4 className="text-sm font-medium text-primary mb-2">Summary</h4>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {recording.transcript.extractedInfo?.summary || 'No summary available'}
+                  </p>
+                  {recording.transcript.summaryUrl && (
+                    <a 
+                      href={recording.transcript.summaryUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline block mt-2"
+                    >
+                      View Full Summary
+                    </a>
+                  )}
+                  {recording.transcript.transcriptUrl && (
+                    <a
+                      href={recording.transcript.transcriptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer" 
+                      className="text-sm text-primary hover:underline block mt-1"
+                    >
+                      View Full Transcript
+                    </a>
+                  )}
+                </div>
+              )}
 
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Microphone audio */}
