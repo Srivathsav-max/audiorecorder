@@ -1,4 +1,4 @@
-import { getCookie, AUTH_COOKIE_NAME } from './cookies';
+import { getCookie, AUTH_COOKIE_NAME } from "@/lib/cookies";
 
 /**
  * Types for API responses
@@ -22,6 +22,11 @@ export interface Recording {
   microphoneAudio: string;
   systemAudio: string;
   combinedAudio: string | null;
+  transcript?: {
+    transcriptUrl: string;
+    summaryUrl: string;
+    extractedInfo: any;
+  };
 }
 
 /**
@@ -42,7 +47,7 @@ export interface PaginationParams extends RequestParams {
  */
 class ApiClient {
   private baseUrl: string;
-  
+
   constructor() {
     this.baseUrl = '/api';
   }
@@ -52,11 +57,11 @@ class ApiClient {
    */
   private getAuthHeader(): HeadersInit {
     const token = getCookie(AUTH_COOKIE_NAME);
-    
+
     if (!token) {
       throw new Error('Authentication required');
     }
-    
+
     return {
       'Authorization': `Bearer ${token}`
     };
@@ -71,7 +76,7 @@ class ApiClient {
   async get<T>(endpoint: string, params: RequestParams = {}): Promise<ApiResponse<T>> {
     try {
       const url = new URL(`${this.baseUrl}${endpoint}`, window.location.origin);
-      
+
       // Add query parameters
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined) {
@@ -83,17 +88,17 @@ class ApiClient {
         ...this.getAuthHeader(),
         'Content-Type': 'application/json'
       } as Record<string, string>;
-      
+
       const response = await fetch(url.toString(), {
         method: 'GET',
         headers
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
         throw new Error(errorData.error || `HTTP error ${response.status}`);
       }
-      
+
       const data = await response.json();
       return {
         success: true,
@@ -117,26 +122,26 @@ class ApiClient {
   async post<T>(endpoint: string, data?: FormData | Record<string, unknown>): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${endpoint}`;
-      
+
       const headers = this.getAuthHeader() as Record<string, string>;
-      
+
       // Handle FormData vs JSON
       const isFormData = data instanceof FormData;
       if (!isFormData) {
         headers['Content-Type'] = 'application/json';
       }
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers,
         body: isFormData ? data : JSON.stringify(data)
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
         throw new Error(errorData.error || `HTTP error ${response.status}`);
       }
-      
+
       const responseData = await response.json();
       return {
         success: true,
@@ -160,7 +165,7 @@ class ApiClient {
   async delete<T>(endpoint: string, params: Record<string, string | number | undefined> = {}): Promise<ApiResponse<T>> {
     try {
       const url = new URL(`${this.baseUrl}${endpoint}`, window.location.origin);
-      
+
       // Add query parameters
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined) {
@@ -169,17 +174,17 @@ class ApiClient {
       });
 
       const headers = this.getAuthHeader() as Record<string, string>;
-      
+
       const response = await fetch(url.toString(), {
         method: 'DELETE',
         headers
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
         throw new Error(errorData.error || `HTTP error ${response.status}`);
       }
-      
+
       const data = await response.json();
       return {
         success: true,
@@ -211,11 +216,11 @@ class ApiClient {
     formData.append('sessionId', sessionId);
     formData.append('microphoneAudio', microphoneBlob, `microphone_${sessionId}.wav`);
     formData.append('systemAudio', systemBlob, `system_${sessionId}.wav`);
-    
+
     if (combinedBlob) {
       formData.append('combinedAudio', combinedBlob, `combined_${sessionId}.wav`);
     }
-    
+
     return this.post<Recording>('/recordings/save', formData);
   }
 
@@ -224,6 +229,83 @@ class ApiClient {
    */
   async deleteRecording(id: string): Promise<ApiResponse<void>> {
     return this.delete<void>('/recordings', { id });
+  }
+  
+  /**
+   * Generate transcript and summary for a recording
+   */
+  async generateTranscriptAndSummary(audioUrl: string): Promise<ApiResponse<{
+    transcriptUrl: string;
+    summaryUrl: string;
+    extractedInfo: any;
+  }>> {
+    try {
+      // First fetch the audio file
+      const audioResponse = await fetch(audioUrl);
+      if (!audioResponse.ok) {
+        throw new Error('Failed to fetch audio file');
+      }
+      
+      const audioBlob = await audioResponse.blob();
+      // Ensure we're sending as WAV with .wav extension
+      const originalFilename = audioUrl.split('/').pop() || '';
+      const filename = originalFilename.replace(/\.[^/.]+$/, '') + '.wav';
+      
+      console.log('Audio blob:', {
+        size: audioBlob.size,
+        type: audioBlob.type,
+        filename: filename
+      });
+      
+      // Create a form with the audio file
+      const formData = new FormData();
+      // Convert blob to WAV format if needed
+      const audioFile = new File([audioBlob], filename, { 
+        type: 'audio/wav',
+        lastModified: new Date().getTime()
+      });
+      formData.append('file', audioFile);
+      formData.append('diarize', 'true');
+      formData.append('transcribe', 'true');
+      formData.append('summarize', 'true');
+      
+      // Connect to our Speech2Transcript API
+      const SPEECH_TO_TRANSCRIPT_API = 'http://localhost:5512/api/process';
+      
+      console.log('Sending request to:', SPEECH_TO_TRANSCRIPT_API);
+      
+      const response = await fetch(SPEECH_TO_TRANSCRIPT_API, {
+        method: 'POST',
+        body: formData,
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      console.log('Response status:', response.status);
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Error response:', text);
+        throw new Error(text || `HTTP error ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return {
+        success: true,
+        data: {
+          transcriptUrl: data.outputs.transcription?.json,
+          summaryUrl: data.outputs.summary?.text,
+          extractedInfo: data.outputs.summary
+        }
+      };
+    } catch (error) {
+      console.error('Error generating transcript and summary:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate transcript and summary'
+      };
+    }
   }
 
   // ===== Storage API =====
@@ -238,7 +320,7 @@ class ApiClient {
     }
     return `/api/storage/file/${fileId}`;
   }
-  
+
   /**
    * Create authenticated fetch options for file access
    */
