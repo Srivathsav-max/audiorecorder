@@ -30,6 +30,42 @@ export interface SavedRecordingResult {
   combinedAudioUrl: string | null;
 }
 
+interface ProcessAudioResult {
+  transcriptionData: any;
+  summaryData: any;
+}
+
+export const processAudio = async (audioFile: File): Promise<ProcessAudioResult> => {
+  try {
+    const formData = new FormData();
+    formData.append('file', audioFile);
+    formData.append('diarize', 'true');
+    formData.append('transcribe', 'true');
+    formData.append('summarize', 'true');
+
+    const response = await fetch('http://localhost:5512/api/process', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to process audio: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return {
+      transcriptionData: {
+        diarization: result.outputs.diarization,
+        transcription: result.outputs.transcription,
+      },
+      summaryData: result.outputs.summary
+    };
+  } catch (error) {
+    console.error('Error processing audio:', error);
+    throw error;
+  }
+};
+
 export const saveRecording = async (
   sessionId: string,
   microphoneFile: File,
@@ -56,16 +92,24 @@ export const saveRecording = async (
       combinedFileId = await saveAudioFileToAppwrite(combinedFile);
     }
     
+    // Process the combined audio if available, otherwise use microphone audio
+    const audioToProcess = combinedFile || microphoneFile;
+    const processedData = await processAudio(audioToProcess);
+
     // Create record in database using Prisma
     const recording = await prisma.recording.create({
       data: {
         appwriteId: sessionId,
         name: `Recording ${timestamp}`,
-        duration: 0, // You might want to calculate this from the blob
+        duration: processedData.transcriptionData.diarization.duration || 0,
         userId,
         microphoneAudioFileId: microphoneFileId,
         systemAudioFileId: systemFileId,
-        combinedAudioFileId: combinedFileId || null
+        combinedAudioFileId: combinedFileId || null,
+        transcriptionData: processedData.transcriptionData,
+        summaryData: processedData.summaryData,
+        processingStatus: 'COMPLETED',
+        processedAt: new Date()
       }
     });
     

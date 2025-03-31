@@ -18,7 +18,7 @@ model User {
   id        String     @id @default(uuid())
   email     String     @unique
   name      String?
-  role      String     @default("USER") // Changed from nullable to required with default
+  role      String     @default("USER") 
   password  String
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -37,8 +37,13 @@ model Recording {
   microphoneAudioFileId String
   systemAudioFileId     String
   combinedAudioFileId   String?
+  transcriptionData     Json?      
+  summaryData          Json?     
+  processingStatus     String     @default("PENDING") 
+  processedAt         DateTime?  
 
   @@index([userId])
+  @@index([processingStatus])
 }
 
 model AppSettings {
