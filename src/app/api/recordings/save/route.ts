@@ -67,16 +67,43 @@ export async function POST(req: NextRequest) {
       combinedFileId = await storageService.uploadFile(combinedFile, combinedFile.name);
     }
 
-    // Save recording to database
+    // Process audio through Speech2Transcript API
+    const audioToProcess = combinedFile || microphoneFile;
+    const processFormData = new FormData();
+    processFormData.append('file', audioToProcess);
+    processFormData.append('diarize', 'true');
+    processFormData.append('transcribe', 'true');
+    processFormData.append('summarize', 'true');
+
+    console.log('Processing audio through Speech2Transcript API...');
+    const response = await fetch('http://localhost:5512/api/process', {
+      method: 'POST',
+      body: processFormData,
+    });
+
+    if (!response.ok) {
+      throw new ApiError(`Failed to process audio: ${response.statusText}`, 500);
+    }
+
+    const processingResult = await response.json();
+    
+    // Save recording to database with transcription data
     const recording = await prisma.recording.create({
       data: {
         appwriteId: sessionId,
         name: `Recording ${new Date().toLocaleString()}`,
-        duration: 0, // TODO: Calculate actual duration from audio file
+        duration: processingResult.outputs.diarization?.duration || 0,
         microphoneAudioFileId: microphoneFileId,
         systemAudioFileId: systemFileId,
         combinedAudioFileId: combinedFileId,
-        userId: user.id
+        userId: user.id,
+        transcriptionData: {
+          diarization: processingResult.outputs.diarization,
+          transcription: processingResult.outputs.transcription,
+        },
+        summaryData: processingResult.outputs.summary,
+        processingStatus: 'COMPLETED',
+        processedAt: new Date()
       }
     });
 
