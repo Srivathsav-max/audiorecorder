@@ -1,6 +1,7 @@
 import { hash, compare } from 'bcryptjs';
 import { sign, verify } from 'jsonwebtoken';
 import { prisma } from './prisma';
+import { AuthError } from './error-handler';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key';
 
@@ -36,12 +37,12 @@ export async function verifyUser(email: string, password: string) {
   });
 
   if (!user || !user.password) {
-    throw new Error('Invalid credentials');
+    throw new AuthError('Invalid credentials');
   }
 
   const isValid = await compare(password, user.password);
   if (!isValid) {
-    throw new Error('Invalid credentials');
+    throw new AuthError('Invalid credentials');
   }
 
   return {
@@ -69,7 +70,7 @@ export function verifyToken(token: string): AuthUser {
   try {
     return verify(token, JWT_SECRET) as AuthUser;
   } catch {
-    throw new Error('Invalid token');
+    throw new AuthError('Invalid or expired token');
   }
 }
 
@@ -80,7 +81,7 @@ export async function getUserFromToken(token: string) {
   });
 
   if (!user) {
-    throw new Error('User not found');
+    throw new AuthError('User not found or deactivated');
   }
 
   return {

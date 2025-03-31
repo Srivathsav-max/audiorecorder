@@ -18,20 +18,38 @@ async function getStorageFile(
   // Get file ID from params
   const { id } = await params;
 
-  // Authenticate user
+  // Validate request
   const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new AuthError('Authentication required for file access');
+  if (!authHeader) {
+    throw new AuthError('Missing authorization header');
+  }
+  
+  if (!authHeader.startsWith('Bearer ')) {
+    throw new AuthError('Invalid authorization format. Use Bearer token');
   }
 
   const token = authHeader.split(' ')[1];
-  await getUserFromToken(token);
+  if (!token) {
+    throw new AuthError('Missing token in authorization header');
+  }
+
+  // Authenticate user
+  try {
+    await getUserFromToken(token);
+  } catch (error) {
+    // getUserFromToken now throws AuthError with specific messages
+    throw error;
+  }
 
   try {
-    // Get the file preview URL from Appwrite using storageService
+    if (!id || typeof id !== 'string') {
+      throw new StorageError('Invalid file ID', 400);
+    }
+
+    // Get the file preview URL from Appwrite
     const filePreviewUrl = storageService.getFilePreview(id);
     
-    // Fetch the file using the URL to proxy it
+    // Proxy the file through our server
     const fileResponse = await fetch(filePreviewUrl);
     
     if (!fileResponse.ok) {
