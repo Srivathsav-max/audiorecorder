@@ -97,20 +97,15 @@ const BackendStatus: React.FC = () => {
                 status = 'degraded';
                 console.warn('Backend returned unexpected response format:', data);
               }
-            } catch (error: unknown) {
+            } catch (jsonError: unknown) {
               // Invalid JSON response
               status = 'degraded';
               responseMessage = 'Invalid JSON response';
-              console.warn('Backend returned invalid JSON:', error);
+              console.warn('Backend returned invalid JSON:', jsonError);
             }
           } else {
             status = 'degraded';
-            try {
-              const errorData = await response.text();
-              responseMessage = errorData || 'No error details available';
-            } catch (error: unknown) {
-              responseMessage = 'Could not parse error response';
-            }
+            responseMessage = await response.text() || 'No error details available';
           }
           
           setStatusData({
@@ -121,13 +116,13 @@ const BackendStatus: React.FC = () => {
             responseStatus
           });
           
-        } catch (error: unknown) {
+        } catch (fetchError: unknown) {
           clearTimeout(timeoutId);
           let errorDetails = 'Unknown error';
           
-          if (error instanceof Error) {
-            errorDetails = error.message;
-            if (error.name === 'AbortError') {
+          if (fetchError instanceof Error) {
+            errorDetails = fetchError.message;
+            if (fetchError.name === 'AbortError') {
               status = 'degraded'; // Timeout is considered degraded
               errorDetails = 'Request timed out after 5 seconds';
             } else {
@@ -135,7 +130,7 @@ const BackendStatus: React.FC = () => {
             }
           } else {
             status = 'outage';
-            console.error('Unknown error type:', error);
+            console.error('Unknown error type:', fetchError);
           }
           
           setStatusData({
@@ -145,20 +140,20 @@ const BackendStatus: React.FC = () => {
             errorDetails
           });
         }
-      } catch (error: unknown) {
-        console.error('Backend check failed:', error);
+      } catch (checkError: unknown) {
+        console.error('Backend check failed:', checkError);
         status = 'outage';
         
         setStatusData({
           status,
           url: backendUrl,
           lastChecked: new Date(),
-          errorDetails: error instanceof Error ? error.message : 'Unknown error occurred'
+          errorDetails: checkError instanceof Error ? checkError.message : 'Unknown error occurred'
         });
       }
-    } catch (error: unknown) {
-      console.error('Error checking backend status:', error);
-      setError(error instanceof Error ? error.message : 'An unknown error occurred');
+    } catch (settingsError: unknown) {
+      console.error('Error checking backend status:', settingsError);
+      setError(settingsError instanceof Error ? settingsError.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
     }
