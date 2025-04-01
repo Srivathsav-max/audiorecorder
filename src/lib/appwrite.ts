@@ -1,4 +1,4 @@
-import { Client, Storage, Databases, ID } from 'appwrite';
+import { Client, Storage, Databases, ID, Models } from 'appwrite';
 
 if (!process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT) throw new Error('NEXT_PUBLIC_APPWRITE_ENDPOINT is not defined');
 if (!process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID) throw new Error('NEXT_PUBLIC_APPWRITE_PROJECT_ID is not defined');
@@ -124,6 +124,21 @@ export const storageService = {
       );
     } catch (error) {
       console.error('Error deleting file from Appwrite:', error);
+      throw error;
+    }
+  },
+
+  // List files in storage bucket
+  listFiles: async (limit: number = 10): Promise<Models.FileList> => {
+    try {
+      const result = await storage.listFiles(
+        APPWRITE_STORAGE_BUCKET_ID,
+        [], 
+        limit.toString()
+      );
+      return result;
+    } catch (error) {
+      console.error('Error listing files from Appwrite:', error);
       throw error;
     }
   }

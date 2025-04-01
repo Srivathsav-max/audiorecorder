@@ -3,8 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Users, Disc, Settings, ArrowUpRight, Activity, Info } from 'lucide-react';
+import { Users, Disc, Settings, ArrowUpRight, Info } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/client-utils';
+import { SystemStatus } from '@/components';
 
 interface DashboardStats {
   totalUsers: number;
@@ -180,49 +181,7 @@ export default function AdminDashboardPage() {
       </Card>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-medium flex items-center">
-              <Activity className="mr-2 h-5 w-5 text-primary" />
-              System Status
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">API</span>
-                <div className="flex items-center">
-                  <span className="h-2.5 w-2.5 rounded-full bg-green-500 mr-1.5"></span>
-                  <span className="text-sm text-muted-foreground">Operational</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Storage</span>
-                <div className="flex items-center">
-                  <span className="h-2.5 w-2.5 rounded-full bg-green-500 mr-1.5"></span>
-                  <span className="text-sm text-muted-foreground">Operational</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Authentication</span>
-                <div className="flex items-center">
-                  <span className="h-2.5 w-2.5 rounded-full bg-green-500 mr-1.5"></span>
-                  <span className="text-sm text-muted-foreground">Operational</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Database</span>
-                <div className="flex items-center">
-                  <span className="h-2.5 w-2.5 rounded-full bg-green-500 mr-1.5"></span>
-                  <span className="text-sm text-muted-foreground">Operational</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="text-xs text-muted-foreground border-t pt-4">
-            Last updated: {new Date().toLocaleString()}
-          </CardFooter>
-        </Card>
+        <SystemStatus />
         
         <Card>
           <CardHeader>
