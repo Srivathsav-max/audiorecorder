@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Trash2, Download, FileText, RefreshCw, Edit, Play } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, Download, FileText, RefreshCw, Edit, Play, MessageSquareText } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +23,7 @@ import {
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { AudioPlayer } from "../AudioPlayer";
+import { TranscriptDisplay } from "../TranscriptDisplay";
 import { toast } from 'sonner';
 import { apiClient, Recording } from '@/lib/api-client';
 
@@ -28,10 +31,32 @@ interface RecordingsListProps {
   onRefresh?: () => void;
 }
 
+// Import type from TranscriptDisplay to ensure consistency
+import { TranscriptData } from "../TranscriptDisplay";
+
 interface RecordingsResponse {
   recordings: Recording[];
   nextCursor: string | null;
 }
+
+// Helper function to convert TranscriptionData to TranscriptData
+const convertToTranscriptData = (data: Recording['transcriptionData']): TranscriptData | null => {
+  if (!data) return null;
+
+  console.log('Converting transcription data:', data); // Debug log
+
+  return {
+    segments: data.segments.map(segment => {
+      console.log('Segment:', segment); // Debug log for each segment
+      return {
+        start: segment.start,
+        end: segment.end,
+        speaker: segment.speaker || 'Unknown',
+        transcription: segment.transcription || segment.text || '' // Try both transcription and text fields
+      };
+    })
+  };
+};
 
 // Type guard
 function isValidRecordingsResponse(data: unknown): data is RecordingsResponse {
@@ -55,6 +80,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
   const [editingSummary, setEditingSummary] = useState<string | null>(null);
   const [summaryText, setSummaryText] = useState<string>('');
   const [regeneratingSummary, setRegeneratingSummary] = useState<Record<string, boolean>>({});
+  const [viewingTranscript, setViewingTranscript] = useState<string | null>(null);
   const limit = 10;
 
   // Format date from timestamp
@@ -338,14 +364,24 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
                     <CardDescription>{formatDate(recording.timestamp)}</CardDescription>
                   </div>
                   <div className="flex gap-2">
+                  {recording.transcriptionData?.segments && recording.transcriptionData.segments.length > 0 && (
                     <Button
                       size="icon"
-                      variant="destructive"
-                      onClick={() => handleDelete(recording.id)}
+                      variant="ghost"
+                      title="View Transcript"
+                      onClick={() => setViewingTranscript(recording.id)}
                     >
-                      <Trash2 size={16} />
+                      <MessageSquareText size={16} className="text-blue-500 dark:text-blue-400" />
                     </Button>
-                  </div>
+                  )}
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    onClick={() => handleDelete(recording.id)}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                </div>
                 </div>
               </CardHeader>
 
@@ -366,15 +402,19 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
 
                 {/* Recording Status Badge */}
                 {recording.processingStatus && recording.processingStatus !== 'PENDING' && !processingRecordings[recording.id] && (
-                  <div className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium mb-3 ${
-                    recording.processingStatus === 'COMPLETED'
-                      ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
-                      : recording.processingStatus === 'PROCESSING'
-                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
-                        : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
-                  }`}>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "mb-3",
+                      recording.processingStatus === 'COMPLETED'
+                        ? "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400"
+                        : recording.processingStatus === 'PROCESSING'
+                          ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                          : "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"
+                    )}
+                  >
                     {recording.processingStatus.charAt(0).toUpperCase() + recording.processingStatus.slice(1).toLowerCase()}
-                  </div>
+                  </Badge>
                 )}
 
                 {/* Summary Section */}
@@ -557,8 +597,37 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
             <AudioPlayer
               src={selectedAudio.url}
               label={selectedAudio.label}
+              transcriptionData={
+                convertToTranscriptData(
+                  recordings.find(r => 
+                    r.microphoneAudio === selectedAudio.url || 
+                    r.systemAudio === selectedAudio.url || 
+                    r.combinedAudio === selectedAudio.url
+                  )?.transcriptionData
+                )
+              }
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Transcript Viewer Dialog */}
+      <Dialog
+        open={viewingTranscript !== null}
+        onOpenChange={(open) => !open && setViewingTranscript(null)}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Transcript</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto py-2">
+            {viewingTranscript && (
+              <TranscriptDisplay
+                transcriptionData={convertToTranscriptData(recordings.find(r => r.id === viewingTranscript)?.transcriptionData)}
+                className="mb-4"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

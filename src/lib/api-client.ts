@@ -29,9 +29,22 @@ export interface SummaryData {
 
 export interface TranscriptSegment {
   speaker: string;
-  text: string;
+  text?: string;
+  transcription?: string;
   start: number;
   end: number;
+  segment?: {
+    start: number;
+    end: number;
+  };
+  language?: string;
+  word_timestamps?: Array<{
+    word: string;
+    start: number;
+    end: number;
+  }>;
+  language_probability?: number;
+  label?: string;
 }
 
 export interface TranscriptionData {

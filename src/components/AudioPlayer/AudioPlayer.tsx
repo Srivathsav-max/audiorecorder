@@ -7,17 +7,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download, Play, Pause, Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiClient } from '@/lib/api-client';
+import { TranscriptDisplay, TranscriptData } from '@/components/TranscriptDisplay';
+
+// Format time function - converts seconds to MM:SS format
+const formatTime = (timeInSeconds: number): string => {
+  const minutes = Math.floor(timeInSeconds / 60);
+  const seconds = Math.floor(timeInSeconds % 60);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
 
 interface AudioPlayerProps {
   src: string;
   label: string;
   className?: string;
+  transcriptionData?: TranscriptData | null;
 }
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   src,
   label,
   className = '',
+  transcriptionData = null,
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -95,10 +105,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   };
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  // Seek to specific time
+  const seekToTime = (timeInSeconds: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = timeInSeconds;
+      setCurrentTime(timeInSeconds);
+      
+      // Start playing if not already playing
+      if (!isPlaying) {
+        audioRef.current.play().catch(() => {
+          toast.error('Failed to play audio');
+        });
+        setIsPlaying(true);
+      }
+    }
   };
 
   // Handle audio loading with authentication
@@ -263,6 +283,17 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Transcript Display */}
+        {transcriptionData && (
+          <div className="mt-6">
+            <TranscriptDisplay 
+              transcriptionData={transcriptionData}
+              onTimeClick={seekToTime}
+              currentTime={currentTime}
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
