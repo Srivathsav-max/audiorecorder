@@ -14,6 +14,7 @@ import {
   convertToHighQualityWav
 } from './utils';
 import { saveRecordingToServer } from './recording-service';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   onRecordingStart,
@@ -62,11 +63,11 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         toast.error('Please allow microphone access to see devices');
         return;
       }
-      
+
       // Now that we have permission, enumerate all devices
       const allDevices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = allDevices.filter(device => device.kind === 'audioinput');
-      
+
       const mappedDevices = audioInputs.map(device => ({
         id: device.deviceId,
         label: device.label || `Microphone (${device.deviceId.substring(0, 8)}...)`,
@@ -75,18 +76,18 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
       if (mappedDevices.length > 0) {
         setAudioDevices(mappedDevices);
-        
+
         // Set first device only if no device is selected
         if (!localStorage.getItem('selectedMicrophoneId') && mappedDevices.length > 0) {
           setSelectedMicrophoneId(mappedDevices[0].id);
           localStorage.setItem('selectedMicrophoneId', mappedDevices[0].id);
         }
-        
+
         toast.success(`Found ${mappedDevices.length} audio devices`);
       } else {
         toast.warning('No audio input devices detected');
       }
-      
+
       // Always stop the temporary stream
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
@@ -103,13 +104,13 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       toast.error('Cannot change microphone while recording or processing');
       return;
     }
-    
+
     // Stop any existing streams
     if (microphoneStream) {
       microphoneStream.getTracks().forEach(track => track.stop());
       setMicrophoneStream(null);
     }
-    
+
     // Update selected device and persist to localStorage
     setSelectedMicrophoneId(deviceId);
     localStorage.setItem('selectedMicrophoneId', deviceId);
@@ -319,7 +320,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       setBrowserSupport(checkBrowserSupport());
     }
   }, []);
-  
+
   // Load audio devices on component mount and setup device change listener
   useEffect(() => {
     fetchAudioDevices();
@@ -331,7 +332,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     };
 
     navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
-    
+
     return () => {
       navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
     };
@@ -347,108 +348,129 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   // Display browser compatibility warning if needed
   if (!browserSupport.supported) {
     return (
-      <div className="p-4 text-red-800 bg-red-50 rounded-lg shadow-sm">
-        <p className="font-medium mb-2">Your browser doesn&apos;t support audio recording</p>
-        <ul className="list-disc pl-5 space-y-1 text-sm">
-          <li>MediaRecorder API: {browserSupport.mediaRecorderSupported ? '✓' : '✗'}</li>
-          <li>Microphone Access: {browserSupport.microphoneSupported ? '✓' : '✗'}</li>
-          <li>Screen Capture: {browserSupport.screenCaptureSupported ? '✓' : '✗'}</li>
-        </ul>
-        <p className="mt-2 text-sm">Please use Chrome, Edge, or Firefox for best results.</p>
-      </div>
+      <Card className="p-4 border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800">
+        <CardHeader className="p-0 pb-2">
+          <CardTitle className="text-red-800 dark:text-red-300">Browser Not Supported</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <p className="text-red-700 dark:text-red-400 mb-2">Your browser doesn&apos;t support the features needed for audio recording:</p>
+          <ul className="list-disc pl-5 space-y-1 text-sm text-red-600 dark:text-red-400">
+            <li>MediaRecorder API: {browserSupport.mediaRecorderSupported ? '✓' : '✗'}</li>
+            <li>Microphone Access: {browserSupport.microphoneSupported ? '✓' : '✗'}</li>
+            <li>Screen Capture: {browserSupport.screenCaptureSupported ? '✓' : '✗'}</li>
+          </ul>
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">Please use Chrome, Edge, or Firefox for best results.</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className={`${className}`}>
-      {/* Main Content Area */}
-      <div className="p-6">
-          {/* Device Selection */}
-          <div className="mb-6">
-            <DeviceSelector
-              audioDevices={audioDevices}
-              selectedDeviceId={selectedMicrophoneId}
-              onDeviceChange={handleMicrophoneChange}
-              onRefreshDevices={fetchAudioDevices}
-              disabled={isRecording || isProcessing}
-            />
-          </div>
+    <Card className={`overflow-hidden ${className}`}>
+      <CardHeader>
+        <CardTitle>Audio Recorder</CardTitle>
+        <CardDescription>
+          Record both microphone and system audio in high quality
+        </CardDescription>
+      </CardHeader>
+      
+      <CardContent className="pb-6">
+        {/* Device Selection */}
+        <div className="mb-6">
+          <DeviceSelector
+            audioDevices={audioDevices}
+            selectedDeviceId={selectedMicrophoneId}
+            onDeviceChange={handleMicrophoneChange}
+            onRefreshDevices={fetchAudioDevices}
+            disabled={isRecording || isProcessing}
+          />
+        </div>
 
-          {/* Recording Status */}
-          <div className="flex justify-center mb-8">
-            {isRecording && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-destructive/10 rounded-full">
-                <div className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
-                <span className="font-mono text-sm font-medium text-destructive">
-                  {formatDuration(duration)}
-                </span>
+        {/* Recording Status */}
+        <div className="flex justify-center mb-8">
+          {isRecording && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-destructive/10 rounded-full">
+              <div className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
+              <span className="font-mono text-sm font-medium text-destructive">
+                {formatDuration(duration)}
+              </span>
+            </div>
+          )}
+
+          {isProcessing && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0s' }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
               </div>
-            )}
-            
-            {isProcessing && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0s' }} />
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+              <span className="font-mono text-sm font-medium text-primary">Processing</span>
+            </div>
+          )}
+
+          {!isRecording && !isProcessing && (
+            <div className="px-4 py-2 bg-muted/50 rounded-full">
+              <span className="text-sm text-muted-foreground">Ready to record</span>
+            </div>
+          )}
+        </div>
+
+        {/* Record Button */}
+        <div className="flex justify-center">
+          <Button
+            onClick={toggleRecording}
+            variant={isRecording ? "destructive" : "default"}
+            size="lg"
+            className={`
+              h-24 w-24 rounded-full p-0
+              relative transition-all duration-300
+              ${isRecording ? 'bg-destructive hover:bg-destructive/90' : 'bg-primary hover:bg-primary/90'}
+              ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}
+              shadow-md hover:shadow-lg
+            `}
+            disabled={isProcessing}
+          >
+            <div className="flex flex-col items-center justify-center">
+              {isRecording ? (
+                <div className="w-8 h-8 rounded bg-white" />
+              ) : (
+                <div className="relative">
+                  <Image
+                    src="/microphone.svg"
+                    width={28}
+                    height={28}
+                    alt="Microphone"
+                    className="text-background"
+                  />
                 </div>
-                <span className="font-mono text-sm font-medium text-primary">Processing</span>
-              </div>
-            )}
-            
-            {!isRecording && !isProcessing && (
-              <div className="px-4 py-2 bg-muted/50 rounded-full">
-                <span className="text-sm text-muted-foreground">Ready to record</span>
-              </div>
-            )}
-          </div>
+              )}
+              <span className="text-xs mt-1 text-background font-medium">
+                {isRecording ? 'Stop' : 'Record'}
+              </span>
+            </div>
+          </Button>
+        </div>
 
-          {/* Record Button */}
-          <div className="flex justify-center">
-            <Button
-              onClick={toggleRecording}
-              variant={isRecording ? "destructive" : "default"}
-              size="lg"
-              className={`
-                h-24 w-24 rounded-full p-0
-                relative transition-all duration-300
-                ${isRecording ? 'bg-destructive hover:bg-destructive/90' : 'bg-primary hover:bg-primary/90'}
-                ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}
-                shadow-md hover:shadow-lg
-              `}
-              disabled={isProcessing}
-            >
-              <div className="flex flex-col items-center justify-center">
-                {isRecording ? (
-                  <div className="w-8 h-8 rounded bg-white" />
-                ) : (
-                  <div className="relative">
-                    <Image 
-                      src="/microphone.svg" 
-                      width={28} 
-                      height={28} 
-                      alt="Microphone"
-                      className="text-background"
-                    />
-                  </div>
-                )}
-                <span className="text-xs mt-1 text-background font-medium">
-                  {isRecording ? 'Stop' : 'Record'}
-                </span>
-              </div>
-            </Button>
+        {/* Information note */}
+        {!isRecording && !isProcessing && (
+          <div className="mt-8 text-center text-sm text-muted-foreground">
+            <p>
+              After recording, your audio will be saved securely. You can then generate a transcript 
+              and summary from the recordings tab.
+            </p>
           </div>
-          
-          {/* Live Waveform Visualization */}
-          <div className="mt-8 pt-6 border-t border-border/30">
-            <WaveformVisualizer
-              isRecording={isRecording}
-              isProcessing={isProcessing}
-              microphoneStream={microphoneStream}
-              systemStream={systemStream}
-            />
-          </div>
-      </div>
-    </div>
+        )}
+
+        {/* Live Waveform Visualization */}
+        <div className="mt-8 pt-6 border-t border-border/30">
+          <WaveformVisualizer
+            isRecording={isRecording}
+            isProcessing={isProcessing}
+            microphoneStream={microphoneStream}
+            systemStream={systemStream}
+          />
+        </div>
+      </CardContent>
+    </Card>
   );
 };

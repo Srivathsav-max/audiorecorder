@@ -2,17 +2,27 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Trash2, Download, FileText } from "lucide-react";
+import { Trash2, Download, FileText, RefreshCw, Edit, Play } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { AudioPlayer } from "../AudioPlayer";
 import { toast } from 'sonner';
 import { apiClient, Recording } from '@/lib/api-client';
-import { getCookie, AUTH_COOKIE_NAME } from '@/lib/cookies';
 
 interface RecordingsListProps {
   onRefresh?: () => void;
@@ -31,7 +41,7 @@ function isValidRecordingsResponse(data: unknown): data is RecordingsResponse {
     'recordings' in data &&
     'nextCursor' in data &&
     Array.isArray((data as RecordingsResponse).recordings) &&
-    ((data as RecordingsResponse).nextCursor === null || 
+    ((data as RecordingsResponse).nextCursor === null ||
      typeof (data as RecordingsResponse).nextCursor === 'string')
   );
 }
@@ -40,8 +50,11 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedAudio, setSelectedAudio] = useState<{ url: string; label: string } | null>(null);
-  const [generatingTranscript, setGeneratingTranscript] = useState<Record<string, boolean>>({});
+  const [processingRecordings, setProcessingRecordings] = useState<Record<string, boolean>>({});
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [editingSummary, setEditingSummary] = useState<string | null>(null);
+  const [summaryText, setSummaryText] = useState<string>('');
+  const [regeneratingSummary, setRegeneratingSummary] = useState<Record<string, boolean>>({});
   const limit = 10;
 
   // Format date from timestamp
@@ -60,18 +73,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
   const fetchRecordings = useCallback(async (cursor?: string) => {
     try {
       setLoading(true);
-      
-      const token = getCookie(AUTH_COOKIE_NAME);
-      if (!token) {
-        toast.error('Not authenticated');
-        setLoading(false);
-        return;
-      }
-
-      const response = await apiClient.getRecordings({ 
-        cursor,
-        limit
-      });
+      const response = await apiClient.getRecordings({ cursor, limit });
 
       if (!response.success || !response.data) {
         throw new Error(response.error || 'Failed to fetch recordings');
@@ -82,13 +84,12 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
       }
 
       const { recordings: newRecordings, nextCursor: newCursor } = response.data;
-      
-      setRecordings(prevRecordings => cursor 
-        ? [...prevRecordings, ...newRecordings] 
+
+      setRecordings(prevRecordings => cursor
+        ? [...prevRecordings, ...newRecordings]
         : newRecordings
       );
       setNextCursor(newCursor);
-
     } catch (error) {
       console.error('Error fetching recordings:', error);
       toast.error('Failed to load recordings');
@@ -141,15 +142,159 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
     }
   };
 
-  // Download audio
-  const handleDownload = (url: string, fileName: string) => {
-    // Create a link and trigger download
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  // Download audio with authentication
+  const handleDownload = async (url: string, fileName: string) => {
+    try {
+      const response = await fetch(url, apiClient.getAuthenticatedFetchOptions());
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      
+      // Create a link and trigger download
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+      
+      toast.success('Download started');
+    } catch (error) {
+      console.error('Error downloading audio:', error);
+      toast.error('Failed to download audio file');
+    }
+  };
+
+  // Generate transcript and summary
+  const handleGenerateSummary = async (recording: Recording) => {
+    try {
+      setProcessingRecordings(prev => ({ ...prev, [recording.id]: true }));
+
+      // Get authenticated URL (prefer combined audio if available)
+      const audioUrl = recording.combinedAudio || recording.microphoneAudio;
+
+      await toast.promise(
+        async () => {
+          const response = await apiClient.generateTranscriptAndSummary(
+            recording.id,
+            audioUrl
+          );
+
+          if (!response.success) {
+            throw new Error(response.error);
+          }
+
+          // Update the recording with processed data
+          setRecordings(prev => prev.map(r =>
+            r.id === recording.id
+              ? {
+                  ...r,
+                  processingStatus: 'COMPLETED'
+                }
+              : r
+          ));
+
+          return response;
+        },
+        {
+          loading: 'Processing audio file...',
+          success: 'Generated transcript and summary',
+          error: (err) => err.message || 'Failed to generate transcript'
+        }
+      );
+    } catch (error) {
+      console.error('Error generating transcript:', error);
+    } finally {
+      setProcessingRecordings(prev => ({ ...prev, [recording.id]: false }));
+    }
+  };
+
+  // Regenerate summary
+  const handleRegenerateSummary = async (recordingId: string) => {
+    try {
+      setRegeneratingSummary(prev => ({ ...prev, [recordingId]: true }));
+
+      await toast.promise(
+        async () => {
+          const response = await apiClient.regenerateSummary(recordingId);
+
+          if (!response.success) {
+            throw new Error(response.error);
+          }
+
+          // Update the recording with new summary info
+          setRecordings(prev => prev.map(r =>
+            r.id === recordingId
+              ? { 
+                  ...r, 
+                  summaryData: {
+                    summary: response.data?.summaryUrl || '',
+                    lastModified: new Date().toISOString(),
+                    extracted_info: response.data?.extractedInfo || {}
+                  }
+                }
+              : r
+          ));
+
+          return response;
+        },
+        {
+          loading: 'Regenerating summary...',
+          success: 'Summary regenerated successfully',
+          error: (err) => err.message || 'Failed to regenerate summary'
+        }
+      );
+    } catch (error) {
+      console.error('Error regenerating summary:', error);
+    } finally {
+      setRegeneratingSummary(prev => ({ ...prev, [recordingId]: false }));
+    }
+  };
+
+  // Edit summary
+  const openEditSummary = (recordingId: string, currentSummary: string) => {
+    setEditingSummary(recordingId);
+    setSummaryText(currentSummary);
+  };
+
+  // Save edited summary
+  const saveEditedSummary = async () => {
+    if (!editingSummary) return;
+
+    try {
+      await toast.promise(
+        async () => {
+          const response = await apiClient.editSummary(editingSummary, summaryText);
+
+          if (!response.success) {
+            throw new Error(response.error);
+          }
+
+          // Update the recording with edited summary
+          setRecordings(prev => prev.map(r =>
+            r.id === editingSummary
+              ? response.data?.recording || r
+              : r
+          ));
+
+          return response;
+        },
+        {
+          loading: 'Saving edited summary...',
+          success: 'Summary updated successfully',
+          error: (err) => err.message || 'Failed to update summary'
+        }
+      );
+
+      // Close dialog after successful save
+      setEditingSummary(null);
+      setSummaryText('');
+    } catch (error) {
+      console.error('Error saving edited summary:', error);
+    }
   };
 
   // Load recordings on mount
@@ -158,7 +303,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
   }, [fetchRecordings]);
 
   return (
-    <div className="mt-8">
+    <div className="mt-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-medium">Recordings</h2>
         <Button
@@ -186,233 +331,213 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
       ) : (
         <div className="space-y-4">
           {recordings.map((recording) => (
-            <div
+            <Card
               key={recording.id}
-              className="border border-border/40 rounded-lg p-4 bg-background"
+              className="border-border/40 shadow-sm hover:shadow-md transition-shadow duration-200"
             >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-medium">{recording.name || recording.sessionId}</h3>
-                  <div className="flex gap-2 items-center">
-                    <p className="text-sm text-muted-foreground">{formatDate(recording.timestamp)}</p>
-                    {recording.processingStatus === 'PENDING' && (
-                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
-                        Processing
-                      </span>
-                    )}
-                    {recording.processingStatus === 'ERROR' && (
-                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 rounded">
-                        Error
-                      </span>
-                    )}
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg">{recording.name || recording.sessionId}</CardTitle>
+                    <CardDescription>{formatDate(recording.timestamp)}</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="icon"
+                      variant="destructive"
+                      onClick={() => handleDelete(recording.id)}
+                    >
+                      <Trash2 size={16} />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    disabled={generatingTranscript[recording.id]}
-                    onClick={async () => {
-                      try {
-                        setGeneratingTranscript(prev => ({ ...prev, [recording.id]: true }));
-                        // Get authenticated URL
-                        const audioUrl = new URL(recording.combinedAudio || recording.microphoneAudio, window.location.origin).toString();
-                        await toast.promise(
-                          async () => {
-                            const response = await apiClient.generateTranscriptAndSummary(audioUrl, recording.id);
-                            if (!response.success) {
-                              throw new Error(response.error);
-                            }
-                            // Update the recording with transcript info and refresh the list
-                            await fetchRecordings();
-                            return response;
-                          },
-                          {
-                            loading: 'Processing audio file...',
-                            success: 'Generated transcript and summary',
-                            error: (err) => err.message || 'Failed to generate transcript'
-                          }
-                        );
-                      } catch (error) {
-                        console.error('Error generating transcript:', error);
-                      } finally {
-                        setGeneratingTranscript(prev => ({ ...prev, [recording.id]: false }));
-                      }
-                    }}
-                  >
-                    <FileText size={16} className={recording.summaryData ? 'text-green-500' : ''} />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="destructive"
-                    onClick={() => handleDelete(recording.id)}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                </div>
-              </div>
+              </CardHeader>
 
-              {recording.summaryData && (
-                <div className="mt-3 p-3 bg-muted/20 rounded-md">
-                  <h4 className="text-sm font-medium text-primary mb-2">Summary</h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {recording.summaryData.summary || 'No summary available'}
-                  </p>
-                  
-                  {/* Show extracted information */}
-                  {recording.summaryData.extracted_info && (
-                    <div className="mt-4 space-y-3">
-                      {/* Patient Info */}
-                      <div className="space-y-1">
-                        <h5 className="text-xs font-medium">Patient Information</h5>
-                        <p className="text-xs text-muted-foreground">
-                          {`Patient: ${recording.summaryData.extracted_info.patient_name || 'Not identified'}`}
-                          {recording.summaryData.extracted_info.provider_name && 
-                            ` | Provider: ${recording.summaryData.extracted_info.provider_name}`}
-                        </p>
+              <CardContent className="pb-2">
+                {/* Processing Status */}
+                {processingRecordings[recording.id] && (
+                  <div className="bg-primary/5 rounded-md p-3 mb-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0s' }} />
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
                       </div>
-
-                      {/* Conditions */}
-                      {recording.summaryData.extracted_info.conditions.length > 0 && (
-                        <div className="space-y-1">
-                          <h5 className="text-xs font-medium">Conditions</h5>
-                          <p className="text-xs text-muted-foreground">
-                            {recording.summaryData.extracted_info.conditions.join(', ')}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Medications */}
-                      {recording.summaryData.extracted_info.medications.length > 0 && (
-                        <div className="space-y-1">
-                          <h5 className="text-xs font-medium">Medications</h5>
-                          <p className="text-xs text-muted-foreground">
-                            {recording.summaryData.extracted_info.medications.join(', ')}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Vital Signs */}
-                      {Object.keys(recording.summaryData.extracted_info.vital_signs).length > 0 && (
-                        <div className="space-y-1">
-                          <h5 className="text-xs font-medium">Vital Signs</h5>
-                          <div className="text-xs text-muted-foreground">
-                            {Object.entries(recording.summaryData.extracted_info.vital_signs).map(([key, value]) => (
-                              <span key={key} className="mr-3">
-                                {`${key}: ${value}`}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Follow-up Actions */}
-                      {recording.summaryData.extracted_info.detailed_entities.follow_up.action_items.length > 0 && (
-                        <div className="space-y-1">
-                          <h5 className="text-xs font-medium">Follow-up Actions</h5>
-                          <ul className="text-xs text-muted-foreground list-disc pl-4">
-                            {recording.summaryData.extracted_info.detailed_entities.follow_up.action_items.map((item, index) => (
-                              <li key={index}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                      <span className="text-sm text-primary">Processing audio...</span>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
 
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Microphone audio */}
-                <div
-                  className="bg-muted/30 rounded-md p-3 cursor-pointer hover:bg-muted/50 transition-colors group"
-                  onClick={() => setSelectedAudio({
-                    url: recording.microphoneAudio,
-                    label: "Microphone Audio"
-                  })}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium group-hover:text-primary transition-colors">Microphone</span>
+                {/* Recording Status Badge */}
+                {recording.processingStatus && recording.processingStatus !== 'PENDING' && !processingRecordings[recording.id] && (
+                  <div className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium mb-3 ${
+                    recording.processingStatus === 'COMPLETED'
+                      ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
+                      : recording.processingStatus === 'PROCESSING'
+                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                        : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
+                  }`}>
+                    {recording.processingStatus.charAt(0).toUpperCase() + recording.processingStatus.slice(1).toLowerCase()}
+                  </div>
+                )}
+
+                {/* Summary Section */}
+                {recording.summaryData ? (
+                  <div className="mt-2 p-4 bg-muted/20 rounded-md">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-medium text-primary">Summary</h4>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2"
+                          onClick={() => openEditSummary(
+                            recording.id,
+                            recording.summaryData?.summary || ''
+                          )}
+                          disabled={regeneratingSummary[recording.id]}
+                        >
+                          <Edit size={14} className="mr-1" /> Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2"
+                          onClick={() => handleRegenerateSummary(recording.id)}
+                          disabled={regeneratingSummary[recording.id]}
+                        >
+                          {regeneratingSummary[recording.id] ? (
+                            <>
+                              <RefreshCw size={14} className="mr-1 animate-spin" /> Processing...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw size={14} className="mr-1" /> Regenerate
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {recording.summaryData.summary || 'No summary available'}
+                    </p>
+                  </div>
+                ) : (
+                  recording.processingStatus !== 'PROCESSING' && !processingRecordings[recording.id] && (
+                    <div className="mt-2 p-4 bg-muted/10 rounded-md flex flex-col items-center justify-center text-center">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        No transcript or summary available yet
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleGenerateSummary(recording)}
+                        disabled={processingRecordings[recording.id]}
+                      >
+                        <FileText size={14} className="mr-2" />
+                        Generate Summary
+                      </Button>
+                    </div>
+                  )
+                )}
+              </CardContent>
+
+              <CardFooter className="pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
+                  {/* Microphone audio */}
+                  <div
+                    className="bg-muted/30 rounded-md p-3 cursor-pointer hover:bg-muted/50 transition-colors group flex items-center justify-between"
+                    onClick={() => setSelectedAudio({
+                      url: recording.microphoneAudio,
+                      label: "Microphone Audio"
+                    })}
+                  >
+                    <div className="flex items-center">
+                      <Play size={14} className="mr-2 text-muted-foreground" />
+                      <span className="text-sm font-medium group-hover:text-primary transition-colors">Microphone</span>
+                    </div>
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        handleDownload(
+                        await handleDownload(
                           recording.microphoneAudio,
                           `microphone_${recording.sessionId}.wav`
                         );
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7"
                     >
-                      <Download size={16} />
+                      <Download size={14} />
                     </Button>
                   </div>
-                </div>
 
-                {/* System audio */}
-                <div
-                  className="bg-muted/30 rounded-md p-3 cursor-pointer hover:bg-muted/50 transition-colors group"
-                  onClick={() => setSelectedAudio({
-                    url: recording.systemAudio,
-                    label: "System Audio"
-                  })}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium group-hover:text-primary transition-colors">System</span>
+                  {/* System audio */}
+                  <div
+                    className="bg-muted/30 rounded-md p-3 cursor-pointer hover:bg-muted/50 transition-colors group flex items-center justify-between"
+                    onClick={() => setSelectedAudio({
+                      url: recording.systemAudio,
+                      label: "System Audio"
+                    })}
+                  >
+                    <div className="flex items-center">
+                      <Play size={14} className="mr-2 text-muted-foreground" />
+                      <span className="text-sm font-medium group-hover:text-primary transition-colors">System</span>
+                    </div>
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        handleDownload(
+                        await handleDownload(
                           recording.systemAudio,
                           `system_${recording.sessionId}.wav`
                         );
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7"
                     >
-                      <Download size={16} />
+                      <Download size={14} />
                     </Button>
                   </div>
-                </div>
 
-                {/* Combined audio */}
-                {recording.combinedAudio && (
-                  <div
-                    className="bg-muted/30 rounded-md p-3 cursor-pointer hover:bg-muted/50 transition-colors group"
-                    onClick={() => setSelectedAudio({
-                      url: recording.combinedAudio!,
-                      label: "Combined Audio"
-                    })}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium group-hover:text-primary transition-colors">Combined</span>
+                  {/* Combined audio */}
+                  {recording.combinedAudio && (
+                    <div
+                      className="bg-muted/30 rounded-md p-3 cursor-pointer hover:bg-muted/50 transition-colors group flex items-center justify-between"
+                      onClick={() => setSelectedAudio({
+                        url: recording.combinedAudio!,
+                        label: "Combined Audio"
+                      })}
+                    >
+                      <div className="flex items-center">
+                        <Play size={14} className="mr-2 text-muted-foreground" />
+                        <span className="text-sm font-medium group-hover:text-primary transition-colors">Combined</span>
+                      </div>
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          handleDownload(
+                          await handleDownload(
                             recording.combinedAudio!,
                             `combined_${recording.sessionId}.wav`
                           );
                         }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7"
                       >
-                        <Download size={16} />
+                        <Download size={14} />
                       </Button>
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
+                  )}
+                </div>
+              </CardFooter>
+            </Card>
           ))}
-          
+
           {nextCursor && (
             <div className="flex justify-center mt-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={loadMore}
                 disabled={loading}
               >
@@ -423,6 +548,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
         </div>
       )}
 
+      {/* Audio Player Dialog */}
       <Dialog
         open={selectedAudio !== null}
         onOpenChange={(open) => !open && setSelectedAudio(null)}
@@ -437,6 +563,44 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
               label={selectedAudio.label}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Summary Dialog */}
+      <Dialog
+        open={editingSummary !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingSummary(null);
+            setSummaryText('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Summary</DialogTitle>
+            <DialogDescription>
+              Make changes to the summary below and save when you&apos;re done.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={summaryText}
+            onChange={(e) => setSummaryText(e.target.value)}
+            className="min-h-[200px]"
+            placeholder="Enter the summary..."
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingSummary(null);
+                setSummaryText('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveEditedSummary}>Save Changes</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

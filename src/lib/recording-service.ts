@@ -1,6 +1,8 @@
 import { storageService } from '@/lib/appwrite';
 import { prisma } from './prisma';
 import { getFormattedDateTime } from '@/components/AudioRecorder/utils';
+import { TranscriptionData, SummaryData } from '@/lib/api-client';
+import { Prisma } from '@prisma/client';
 
 export const getAudioFileUrl = (fileId: string): string => {
   if (!fileId) return '';
@@ -31,8 +33,8 @@ export interface SavedRecordingResult {
 }
 
 interface ProcessAudioResult {
-  transcriptionData: any;
-  summaryData: any;
+  transcriptionData: TranscriptionData;
+  summaryData: SummaryData;
 }
 
 export const processAudio = async (audioFile: File): Promise<ProcessAudioResult> => {
@@ -55,10 +57,15 @@ export const processAudio = async (audioFile: File): Promise<ProcessAudioResult>
     const result = await response.json();
     return {
       transcriptionData: {
-        diarization: result.outputs.diarization,
-        transcription: result.outputs.transcription,
+        segments: result.outputs.transcription.segments,
+        duration: result.outputs.diarization?.duration,
+        language: result.outputs.transcription?.language
       },
-      summaryData: result.outputs.summary
+      summaryData: {
+        summary: result.outputs.summary.text || '',
+        lastModified: new Date().toISOString(),
+        extracted_info: result.outputs.summary.extracted_info || {}
+      }
     };
   } catch (error) {
     console.error('Error processing audio:', error);
@@ -114,9 +121,9 @@ export const saveRecording = async (
       await prisma.recording.update({
         where: { id: recording.id },
         data: {
-          duration: processedData.transcriptionData.diarization.duration || 0,
-          transcriptionData: processedData.transcriptionData,
-          summaryData: processedData.summaryData,
+          duration: processedData.transcriptionData.duration || 0,
+          transcriptionData: processedData.transcriptionData as Prisma.InputJsonValue,
+          summaryData: processedData.summaryData as Prisma.InputJsonValue,
           processingStatus: 'COMPLETED',
           processedAt: new Date()
         }

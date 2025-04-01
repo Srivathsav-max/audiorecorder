@@ -57,6 +57,10 @@ export async function GET(req: NextRequest) {
       combinedAudio: recording.combinedAudioFileId
         ? `${baseUrl}/api/storage/file/${recording.combinedAudioFileId}`
         : null,
+      processingStatus: recording.processingStatus,
+      summaryData: recording.summaryData,
+      transcriptionData: recording.transcriptionData,
+      processedAt: recording.processedAt?.toISOString() || null
     }));
 
     return NextResponse.json({
@@ -108,10 +112,6 @@ export async function DELETE(req: NextRequest) {
     await prisma.recording.delete({
       where: { id }
     });
-
-    // TODO: Delete files from Appwrite storage
-    // This would be handled by a background job or a separate API call
-    // to avoid blocking the response
 
     return NextResponse.json({ 
       success: true,
