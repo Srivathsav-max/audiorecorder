@@ -193,7 +193,19 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="font-medium">{recording.name || recording.sessionId}</h3>
-                  <p className="text-sm text-muted-foreground">{formatDate(recording.timestamp)}</p>
+                  <div className="flex gap-2 items-center">
+                    <p className="text-sm text-muted-foreground">{formatDate(recording.timestamp)}</p>
+                    {recording.processingStatus === 'PENDING' && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
+                        Processing
+                      </span>
+                    )}
+                    {recording.processingStatus === 'ERROR' && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 rounded">
+                        Error
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -207,16 +219,12 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
                         const audioUrl = new URL(recording.combinedAudio || recording.microphoneAudio, window.location.origin).toString();
                         await toast.promise(
                           async () => {
-                            const response = await apiClient.generateTranscriptAndSummary(audioUrl);
+                            const response = await apiClient.generateTranscriptAndSummary(audioUrl, recording.id);
                             if (!response.success) {
                               throw new Error(response.error);
                             }
-                            // Update the recording with transcript info
-                            setRecordings(prev => prev.map(r => 
-                              r.id === recording.id 
-                                ? { ...r, transcript: response.data }
-                                : r
-                            ));
+                            // Update the recording with transcript info and refresh the list
+                            await fetchRecordings();
                             return response;
                           },
                           {
@@ -232,7 +240,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
                       }
                     }}
                   >
-                    <FileText size={16} className={recording.transcript ? 'text-green-500' : ''} />
+                    <FileText size={16} className={recording.summaryData ? 'text-green-500' : ''} />
                   </Button>
                   <Button
                     size="icon"
@@ -244,31 +252,72 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
                 </div>
               </div>
 
-              {recording.transcript && (
+              {recording.summaryData && (
                 <div className="mt-3 p-3 bg-muted/20 rounded-md">
                   <h4 className="text-sm font-medium text-primary mb-2">Summary</h4>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {recording.transcript.extractedInfo?.summary || 'No summary available'}
+                    {recording.summaryData.summary || 'No summary available'}
                   </p>
-                  {recording.transcript.summaryUrl && (
-                    <a 
-                      href={recording.transcript.summaryUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary hover:underline block mt-2"
-                    >
-                      View Full Summary
-                    </a>
-                  )}
-                  {recording.transcript.transcriptUrl && (
-                    <a
-                      href={recording.transcript.transcriptUrl}
-                      target="_blank"
-                      rel="noopener noreferrer" 
-                      className="text-sm text-primary hover:underline block mt-1"
-                    >
-                      View Full Transcript
-                    </a>
+                  
+                  {/* Show extracted information */}
+                  {recording.summaryData.extracted_info && (
+                    <div className="mt-4 space-y-3">
+                      {/* Patient Info */}
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-medium">Patient Information</h5>
+                        <p className="text-xs text-muted-foreground">
+                          {`Patient: ${recording.summaryData.extracted_info.patient_name || 'Not identified'}`}
+                          {recording.summaryData.extracted_info.provider_name && 
+                            ` | Provider: ${recording.summaryData.extracted_info.provider_name}`}
+                        </p>
+                      </div>
+
+                      {/* Conditions */}
+                      {recording.summaryData.extracted_info.conditions.length > 0 && (
+                        <div className="space-y-1">
+                          <h5 className="text-xs font-medium">Conditions</h5>
+                          <p className="text-xs text-muted-foreground">
+                            {recording.summaryData.extracted_info.conditions.join(', ')}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Medications */}
+                      {recording.summaryData.extracted_info.medications.length > 0 && (
+                        <div className="space-y-1">
+                          <h5 className="text-xs font-medium">Medications</h5>
+                          <p className="text-xs text-muted-foreground">
+                            {recording.summaryData.extracted_info.medications.join(', ')}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Vital Signs */}
+                      {Object.keys(recording.summaryData.extracted_info.vital_signs).length > 0 && (
+                        <div className="space-y-1">
+                          <h5 className="text-xs font-medium">Vital Signs</h5>
+                          <div className="text-xs text-muted-foreground">
+                            {Object.entries(recording.summaryData.extracted_info.vital_signs).map(([key, value]) => (
+                              <span key={key} className="mr-3">
+                                {`${key}: ${value}`}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Follow-up Actions */}
+                      {recording.summaryData.extracted_info.detailed_entities.follow_up.action_items.length > 0 && (
+                        <div className="space-y-1">
+                          <h5 className="text-xs font-medium">Follow-up Actions</h5>
+                          <ul className="text-xs text-muted-foreground list-disc pl-4">
+                            {recording.summaryData.extracted_info.detailed_entities.follow_up.action_items.map((item, index) => (
+                              <li key={index}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

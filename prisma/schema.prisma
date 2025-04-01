@@ -37,10 +37,10 @@ model Recording {
   microphoneAudioFileId String
   systemAudioFileId     String
   combinedAudioFileId   String?
-  transcriptionData     Json?      
-  summaryData          Json?     
-  processingStatus     String     @default("PENDING") 
-  processedAt         DateTime?  
+  transcriptionData     Json?      @db.JsonB
+  summaryData          Json?      @db.JsonB
+  processingStatus     String     @default("PENDING")  // PENDING, COMPLETED, ERROR
+  processedAt         DateTime?
 
   @@index([userId])
   @@index([processingStatus])

@@ -13,6 +13,55 @@ export interface ApiResponse<T> {
 /**
  * Recording type returned from the API
  */
+export interface ExtractedInfo {
+  conditions: string[];
+  detailed_entities: {
+    conditions: {
+      confidence: 'low' | 'medium' | 'high';
+      list: string[];
+    };
+    follow_up: {
+      action_items: string[];
+      confidence: 'low' | 'medium' | 'high';
+      next_appointment: string | null;
+    };
+    lifestyle: {
+      confidence: 'low' | 'medium' | 'high';
+      diet: string | null;
+      exercise: string | null;
+      smoking_status: string | null;
+    };
+    medications: {
+      adherence: string | null;
+      confidence: 'low' | 'medium' | 'high';
+      list: string[];
+    };
+    patient_name: {
+      confidence: 'low' | 'medium' | 'high';
+      value: string | null;
+    };
+    provider_name: {
+      confidence: 'low' | 'medium' | 'high';
+      value: string | null;
+    };
+    vital_signs: {
+      blood_pressure: string | null;
+      confidence: 'low' | 'medium' | 'high';
+      glucose: number;
+      other: Record<string, string>;
+      weight: string | null;
+    };
+  };
+  medications: string[];
+  patient_name: string;
+  provider_name: string;
+  speakers: {
+    care_manager: string;
+    patient: string | null;
+  };
+  vital_signs: Record<string, string>;
+}
+
 export interface Recording {
   id: string;
   sessionId: string;
@@ -22,10 +71,27 @@ export interface Recording {
   microphoneAudio: string;
   systemAudio: string;
   combinedAudio: string | null;
-  transcript?: {
-    transcriptUrl: string;
-    summaryUrl: string;
-    extractedInfo: any;
+  processingStatus: 'PENDING' | 'COMPLETED' | 'ERROR';
+  processedAt?: string;
+  transcriptionData?: {
+    segments: Array<{
+      end: number;
+      label: string;
+      language: string;
+      language_probability: number;
+      segment: {
+        end: number;
+        start: number;
+      };
+      speaker: string;
+      start: number;
+      transcription: string;
+      word_timestamps: any[];
+    }>;
+  };
+  summaryData?: {
+    summary: string;
+    extracted_info: ExtractedInfo;
   };
 }
 
@@ -234,7 +300,7 @@ class ApiClient {
   /**
    * Generate transcript and summary for a recording
    */
-  async generateTranscriptAndSummary(audioUrl: string): Promise<ApiResponse<{
+  async generateTranscriptAndSummary(audioUrl: string, recordingId: string): Promise<ApiResponse<{
     transcriptUrl: string;
     summaryUrl: string;
     extractedInfo: any;
@@ -291,6 +357,14 @@ class ApiClient {
       }
       
       const data = await response.json();
+      
+      // Save the processed data to database
+      await this.post(`/recordings/${recordingId}/process`, {
+        processingResult: data.outputs,
+        processingStatus: 'COMPLETED',
+        processedAt: new Date().toISOString()
+      });
+
       return {
         success: true,
         data: {

@@ -93,27 +93,45 @@ export const saveRecording = async (
     }
     
     // Process the combined audio if available, otherwise use microphone audio
-    const audioToProcess = combinedFile || microphoneFile;
-    const processedData = await processAudio(audioToProcess);
-
-    // Create record in database using Prisma
+    // Create initial record in database using Prisma
     const recording = await prisma.recording.create({
       data: {
         appwriteId: sessionId,
         name: `Recording ${timestamp}`,
-        duration: processedData.transcriptionData.diarization.duration || 0,
+        duration: 0, // Will be updated after processing
         userId,
         microphoneAudioFileId: microphoneFileId,
         systemAudioFileId: systemFileId,
         combinedAudioFileId: combinedFileId || null,
-        transcriptionData: processedData.transcriptionData,
-        summaryData: processedData.summaryData,
-        processingStatus: 'COMPLETED',
-        processedAt: new Date()
+        processingStatus: 'PENDING'
       }
     });
     
-    // Return URLs and record ID
+    // Process audio in background
+    const audioToProcess = combinedFile || microphoneFile;
+    processAudio(audioToProcess).then(async (processedData) => {
+      // Update record with processed data
+      await prisma.recording.update({
+        where: { id: recording.id },
+        data: {
+          duration: processedData.transcriptionData.diarization.duration || 0,
+          transcriptionData: processedData.transcriptionData,
+          summaryData: processedData.summaryData,
+          processingStatus: 'COMPLETED',
+          processedAt: new Date()
+        }
+      });
+    }).catch(async (error) => {
+      console.error('Error processing audio:', error);
+      await prisma.recording.update({
+        where: { id: recording.id },
+        data: {
+          processingStatus: 'ERROR'
+        }
+      });
+    });
+
+    // Return initial URLs and record ID immediately
     return {
       id: recording.id,
       microphoneAudioUrl: getAudioFileUrl(microphoneFileId),
