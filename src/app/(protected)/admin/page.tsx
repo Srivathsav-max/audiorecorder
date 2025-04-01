@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Users, Disc, Settings, ArrowUpRight, Info } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/client-utils';
 import { SystemStatus } from '@/components';
+import BackendStatus from './BackendStatus';
 
 interface DashboardStats {
   totalUsers: number;
@@ -181,7 +182,10 @@ export default function AdminDashboardPage() {
       </Card>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SystemStatus />
+        <div className="space-y-6">
+          <SystemStatus />
+          <BackendStatus />
+        </div>
         
         <Card>
           <CardHeader>
