@@ -48,9 +48,9 @@ model Recording {
 
 enum ProcessingStatus {
   PENDING
-  SAVED
+  PROCESSING
   COMPLETED
-  ERROR
+  FAILED
 }
 
 model AppSettings {

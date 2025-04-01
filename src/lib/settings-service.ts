@@ -1,14 +1,25 @@
-import { prisma } from './prisma';
+let cachedBackendUrl: string | null = null;
 
 export async function getBackendUrl(): Promise<string> {
   try {
-    const settings = await prisma.appSettings.findUnique({
-      where: { id: 'app-settings' }
-    });
+    if (cachedBackendUrl) {
+      return cachedBackendUrl;
+    }
+
+    const response = await fetch('/api/settings/backend-url');
     
-    return settings?.backendUrl || process.env.NEXT_PUBLIC_SPEECH2TRANSCRIPT_API_URL || 'http://localhost:8000';
+    if (!response.ok) {
+      throw new Error(`Failed to fetch backend URL: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    cachedBackendUrl = data.url;
+    
+    return cachedBackendUrl as string;
   } catch (error) {
     console.error('Error fetching backend URL:', error);
-    return 'http://localhost:8000'; 
+    
+    const fallbackUrl = process.env.NEXT_PUBLIC_SPEECH2TRANSCRIPT_API_URL || 'http://localhost:8000';
+    return fallbackUrl;
   }
 }

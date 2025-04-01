@@ -2,7 +2,7 @@ import { storageService } from '@/lib/appwrite';
 import { prisma } from './prisma';
 import { getFormattedDateTime } from '@/components/AudioRecorder/utils';
 import { TranscriptionData, SummaryData } from '@/lib/api-client';
-import { Prisma } from '@prisma/client';
+import { Prisma, ProcessingStatus} from '@prisma/client';
 import { getBackendUrl } from './settings-service';
 
 export const getAudioFileUrl = (fileId: string): string => {
@@ -136,7 +136,7 @@ export const saveRecording = async (
       await prisma.recording.update({
         where: { id: recording.id },
         data: {
-          processingStatus: 'ERROR'
+          processingStatus: 'FAILED',
         }
       });
     });
