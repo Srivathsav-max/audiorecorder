@@ -48,8 +48,8 @@ async function updateSummary(
       throw new ApiError('You do not have permission to modify this recording', 403);
     }
 
-    // Update the recording summary
-    await prisma.recording.update({
+    // Update the recording summary and get the updated recording
+    const updatedRecording = await prisma.recording.update({
       where: { id },
       data: {
         summaryData
@@ -58,7 +58,8 @@ async function updateSummary(
 
     return NextResponse.json({
       success: true,
-      message: 'Summary updated successfully'
+      message: 'Summary updated successfully',
+      recording: updatedRecording
     });
 }
 

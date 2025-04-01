@@ -221,22 +221,18 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
         async () => {
           const response = await apiClient.regenerateSummary(recordingId);
 
-          if (!response.success) {
-            throw new Error(response.error);
+          if (!response.success || !response.data) {
+            throw new Error(response.error || 'Failed to regenerate summary');
           }
 
-          // Update the recording with new summary info
+          // Update the recording in state
+          const updatedRecording = response.data.recording;
+          if (!updatedRecording) {
+            throw new Error('Missing recording data in response');
+          }
+          
           setRecordings(prev => prev.map(r =>
-            r.id === recordingId
-              ? { 
-                  ...r, 
-                  summaryData: {
-                    summary: response.data?.summaryUrl || '',
-                    lastModified: new Date().toISOString(),
-                    extracted_info: response.data?.extractedInfo || {}
-                  }
-                }
-              : r
+            r.id === recordingId ? updatedRecording : r
           ));
 
           return response;

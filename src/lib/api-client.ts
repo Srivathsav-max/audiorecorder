@@ -392,6 +392,7 @@ class ApiClient {
   async regenerateSummary(recordingId: string): Promise<ApiResponse<{
     summaryUrl: string;
     extractedInfo: ExtractedInfo;
+    recording: Recording;
   }>> {
     try {
       // Get the recording data
@@ -415,7 +416,7 @@ class ApiClient {
       // Send the transcript to the Speech2Transcript API for regenerating summary
       // Get the base URL from environment variables or use a fallback
       const apiBaseUrl = process.env.NEXT_PUBLIC_SPEECH2TRANSCRIPT_API_URL || 'http://localhost:5512/api';
-      const SPEECH_TO_TRANSCRIPT_API = `${apiBaseUrl}/regenerate-summary`;
+      const SPEECH_TO_TRANSCRIPT_API = `${apiBaseUrl}/regenerate`;
 
       const apiResponse = await fetch(SPEECH_TO_TRANSCRIPT_API, {
         method: 'POST',
@@ -438,12 +439,17 @@ class ApiClient {
       const data = await apiResponse.json();
 
       // Update the recording with the new summary
-      await this.updateRecordingSummary(recordingId, data.outputs.summary);
+      const updateResponse = await this.updateRecordingSummary(recordingId, data.outputs.summary);
+      
+      if (!updateResponse.success || !updateResponse.data?.recording) {
+        throw new Error('Failed to update recording summary');
+      }
 
       // Create response data with default values if undefined
       const responseData = {
         summaryUrl: data.outputs.summary?.text || '',
-        extractedInfo: data.outputs.summary || {}
+        extractedInfo: data.outputs.summary || {},
+        recording: updateResponse.data.recording
       };
 
       return {
@@ -531,10 +537,10 @@ class ApiClient {
   private async updateRecordingSummary(
     recordingId: string,
     summaryData: SummaryData
-  ): Promise<ApiResponse<{success: boolean}>> {
+  ): Promise<ApiResponse<{success: boolean; recording: Recording}>> {
     try {
       console.log('Updating recording summary:', recordingId);
-      return await this.patch<{success: boolean}>(`/recordings/${recordingId}`, {
+      return await this.patch<{success: boolean; recording: Recording}>(`/recordings/${recordingId}`, {
         summaryData,
         // No need to send user info as it's handled by auth middleware
       });
