@@ -48,12 +48,6 @@ export default function ProtectedLayout({
         {children}
       </main>
       <Footer />
-      <div className="fixed bottom-4 right-4 z-50 bg-background/80 backdrop-blur-md rounded-full shadow-lg p-1 border hidden sm:block">
-        <div className="text-xs px-3 py-1 text-muted-foreground flex items-center">
-          <span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-          Enterprise Healthcare System
-        </div>
-      </div>
     </div>
   );
 }

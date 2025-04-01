@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useNetwork } from './NetworkProvider';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 
 type NetworkConnection = {
   rtt: number;
@@ -14,7 +16,6 @@ type NetworkConnection = {
 
 export function NetworkStatus() {
   const { isOnline, isUnstable } = useNetwork();
-  const [showDetails, setShowDetails] = useState(false);
   const [metrics, setMetrics] = useState({
     rtt: 0,
     downlink: 0,
@@ -22,70 +23,83 @@ export function NetworkStatus() {
   });
 
   useEffect(() => {
+    const connection = (navigator as Navigator & { connection?: NetworkConnection }).connection;
+    if (!connection) return;
+
     const updateMetrics = () => {
-      const connection = (navigator as Navigator & { connection?: NetworkConnection }).connection;
-      if (connection) {
-        setMetrics({
-          rtt: connection.rtt || 0,
-          downlink: connection.downlink || 0,
-          effectiveType: connection.effectiveType || '',
-        });
-      }
+      setMetrics({
+        rtt: connection.rtt || 0,
+        downlink: connection.downlink || 0,
+        effectiveType: connection.effectiveType || '',
+      });
     };
 
     updateMetrics();
-    const connection = (navigator as Navigator & { connection?: NetworkConnection }).connection;
-    if (connection) {
-      connection.addEventListener('change', updateMetrics);
-      return () => connection.removeEventListener('change', updateMetrics);
-    }
+    connection.addEventListener('change', updateMetrics);
+    return () => connection.removeEventListener('change', updateMetrics);
   }, []);
 
   const status = isOnline ? (isUnstable ? 'unstable' : 'online') : 'offline';
-
   const statusConfig = {
     online: {
-      color: 'bg-green-500',
-      text: 'Connected',
-      icon: '●',
+      variant: 'secondary' as const,
+      icon: Wifi,
+      color: 'text-green-500',
+      pulseColor: 'bg-green-500/50',
     },
     offline: {
-      color: 'bg-red-500',
-      text: 'Offline',
-      icon: '○',
+      variant: 'destructive' as const,
+      icon: WifiOff,
+      color: 'text-red-500',
+      pulseColor: 'bg-red-500/50',
     },
     unstable: {
-      color: 'bg-orange-500',
-      text: 'Unstable Connection',
-      icon: '◐',
+      variant: 'default' as const,
+      icon: AlertTriangle,
+      color: 'text-yellow-500',
+      pulseColor: 'bg-yellow-500/50',
     },
   }[status];
 
-  return (
-    <div 
-      className="fixed bottom-4 right-4 flex flex-col items-end gap-2"
-      onMouseEnter={() => setShowDetails(true)}
-      onMouseLeave={() => setShowDetails(false)}
-    >
-      <div className={cn(
-        'flex items-center gap-2 rounded-full px-3 py-1.5 shadow-lg transition-all duration-200',
-        'bg-white/10 backdrop-blur-sm hover:bg-white/20',
-        showDetails && isUnstable && 'rounded-t-lg rounded-b-none'
-      )}>
-        <div className={cn('h-2 w-2 rounded-full animate-pulse', statusConfig.color)} />
-        <span className="text-sm font-medium">{statusConfig.text}</span>
-      </div>
+  const Icon = statusConfig.icon;
 
-      {/* Network metrics panel */}
-      {showDetails && isUnstable && (
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg shadow-lg p-3 text-sm">
-          <div className="space-y-1">
-            <p>Round-trip Time: {metrics.rtt}ms</p>
-            <p>Connection: {metrics.effectiveType.toUpperCase()}</p>
-            <p>Download Speed: {metrics.downlink.toFixed(1)} Mbps</p>
-          </div>
+  return (
+    <div className="fixed bottom-4 right-4 z-50">
+      <Badge 
+        variant={statusConfig.variant}
+        className={cn(
+          "relative flex items-center transition-all duration-300",
+          "backdrop-blur-md bg-background/80 shadow-lg border border-border/50",
+          "group overflow-hidden rounded-full p-2",
+          "hover:pr-6 hover:gap-3",
+          "min-h-[2.5rem] min-w-[2.5rem]",
+          statusConfig.color
+        )}
+      >
+        <span className="relative shrink-0 flex items-center justify-center w-5 h-5">
+          <Icon className="w-full h-full" />
+          <span className={cn(
+            "absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full",
+            statusConfig.pulseColor,
+            "animate-ping"
+          )} />
+        </span>
+        
+        {/* Status text that appears on hover */}
+        <div className={cn(
+          "flex items-center gap-3 overflow-hidden transition-all duration-300",
+          "w-0 group-hover:w-auto opacity-0 group-hover:opacity-100"
+        )}>
+          <span className="whitespace-nowrap font-medium text-sm">
+            {metrics.effectiveType || 'Unknown'}
+          </span>
+          {isUnstable && (
+            <span className="whitespace-nowrap text-xs text-muted-foreground border-l border-border/50 pl-3">
+              {metrics.rtt}ms • {metrics.downlink.toFixed(1)} Mbps
+            </span>
+          )}
         </div>
-      )}
+      </Badge>
     </div>
   );
 }
