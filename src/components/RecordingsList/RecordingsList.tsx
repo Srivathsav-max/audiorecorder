@@ -42,6 +42,7 @@ interface RecordingsResponse {
 // Helper function to convert TranscriptionData to TranscriptData
 const convertToTranscriptData = (data: Recording['transcriptionData']): TranscriptData | null => {
   if (!data) return null;
+  if (!data.segments || !Array.isArray(data.segments)) return null;
 
   console.log('Converting transcription data:', data); // Debug log
 
@@ -49,12 +50,18 @@ const convertToTranscriptData = (data: Recording['transcriptionData']): Transcri
     segments: data.segments.map(segment => {
       console.log('Segment:', segment); // Debug log for each segment
       return {
-        start: segment.start,
-        end: segment.end,
+        start: typeof segment.start === 'number' && !isNaN(segment.start) ? segment.start : 0,
+        end: typeof segment.end === 'number' && !isNaN(segment.end) ? segment.end : 0,
         speaker: segment.speaker || 'Unknown',
-        transcription: segment.transcription || segment.text || '' // Try both transcription and text fields
+        transcription: segment.transcription || segment.text || '', // Try both transcription and text fields
+        language: segment.language,
+        language_probability: segment.language_probability !== undefined && 
+                             !isNaN(segment.language_probability) && 
+                             isFinite(segment.language_probability) ? 
+                             segment.language_probability : undefined
       };
-    })
+    }),
+    language: data.language
   };
 };
 
@@ -431,7 +438,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
                             recording.id,
                             recording.summaryData?.summary || ''
                           )}
-                          disabled={regeneratingSummary[recording.id]}
+                          disabled={regeneratingSummary[recording.id] || processingRecordings[recording.id]}
                         >
                           <Edit size={14} className="mr-1" /> Edit
                         </Button>
@@ -440,7 +447,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
                           variant="ghost"
                           className="h-8 px-2"
                           onClick={() => handleRegenerateSummary(recording.id)}
-                          disabled={regeneratingSummary[recording.id]}
+                          disabled={regeneratingSummary[recording.id] || processingRecordings[recording.id]}
                         >
                           {regeneratingSummary[recording.id] ? (
                             <>
@@ -451,6 +458,16 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onRefresh }) => 
                               <RefreshCw size={14} className="mr-1" /> Regenerate
                             </>
                           )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2"
+                          onClick={() => handleGenerateSummary(recording)}
+                          disabled={processingRecordings[recording.id]}
+                          title="Reprocess audio to generate new transcript and summary"
+                        >
+                          <RefreshCw size={14} className="mr-1" /> Reprocess
                         </Button>
                       </div>
                     </div>

@@ -79,9 +79,9 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
 
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
     const filtered = transcriptionData.segments.filter(segment =>
-      segment.transcription.toLowerCase().includes(lowerCaseSearchTerm)
+      (segment.transcription || '').toLowerCase().includes(lowerCaseSearchTerm)
     );
-    
+
     setFilteredSegments(filtered);
   }, [searchTerm, transcriptionData]);
 
@@ -96,7 +96,7 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
     const activeIndex = transcriptionData.segments.findIndex(
       segment => currentTime >= segment.start && currentTime <= segment.end
     );
-    
+
     setActiveSegmentIndex(activeIndex !== -1 ? activeIndex : null);
   }, [currentTime, transcriptionData]);
 
@@ -124,7 +124,7 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
 
   // Group segments by speaker for better visualization
   const groupedSegments: { speaker: string; segments: TranscriptSegment[] }[] = [];
-  
+
   filteredSegments.forEach((segment, index) => {
     if (index === 0 || segment.speaker !== filteredSegments[index - 1].speaker) {
       groupedSegments.push({
@@ -152,48 +152,48 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent>
         <div className="space-y-6 max-h-[400px] overflow-y-auto p-1">
           {groupedSegments.map((group, groupIndex) => (
-            <div 
-              key={`group-${groupIndex}`} 
+            <div
+              key={`group-${groupIndex}`}
               className={cn(
                 "flex flex-col",
-                group.speaker.toLowerCase().includes('patient') 
-                  ? "items-start" 
+                group.speaker.toLowerCase().includes('patient')
+                  ? "items-start"
                   : "items-end"
               )}
             >
               <div className={cn(
                 "flex flex-col max-w-[85%] gap-2",
-                group.speaker.toLowerCase().includes('patient') 
-                  ? "items-start" 
+                group.speaker.toLowerCase().includes('patient')
+                  ? "items-start"
                   : "items-end"
               )}>
-                <Badge 
-                  variant="outline" 
+                <Badge
+                  variant="outline"
                   className={cn(
                     "mb-1",
-                    group.speaker.toLowerCase().includes('patient') 
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400" 
+                    group.speaker.toLowerCase().includes('patient')
+                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
                       : "bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-400"
                   )}
                 >
                   {group.speaker}
                 </Badge>
-                
+
                 {group.segments.map((segment, segmentIndex) => {
                   const isActive = filteredSegments.indexOf(segment) === activeSegmentIndex;
-                  
+
                   return (
-                    <div 
+                    <div
                       key={`segment-${groupIndex}-${segmentIndex}`}
                       ref={isActive ? activeSegmentRef : null}
                       className={cn(
                         "flex flex-col p-3 rounded-lg break-words transition-all",
                         group.speaker.toLowerCase().includes('patient')
-                          ? "bg-blue-50 dark:bg-blue-900/10 rounded-bl-none" 
+                          ? "bg-blue-50 dark:bg-blue-900/10 rounded-bl-none"
                           : "bg-violet-50 dark:bg-violet-900/10 rounded-br-none",
                         isActive && "ring-2 ring-primary"
                       )}
@@ -213,11 +213,25 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
                       </div>
                       <p className="text-sm">
                         {searchTerm.trim() ? (
-                          highlightSearchTerm(segment.transcription, searchTerm)
+                          highlightSearchTerm(segment.transcription || '', searchTerm)
                         ) : (
-                          segment.transcription
+                          segment.transcription || ''
                         )}
                       </p>
+                      {segment.language && (
+                        <div className="flex items-center mt-1 gap-1">
+                          <Badge variant="outline" className="text-xs px-1 py-0">
+                            {segment.language}
+                            {segment.language_probability !== undefined &&
+                             !isNaN(segment.language_probability) &&
+                             isFinite(segment.language_probability) && (
+                              <span className="ml-1 opacity-70">
+                                ({Math.round(segment.language_probability * 100)}%)
+                              </span>
+                            )}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -225,7 +239,7 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
             </div>
           ))}
         </div>
-        
+
         {/* Jump to active section button - only show when not in view */}
         {activeSegmentIndex !== null && (
           <Button
@@ -252,19 +266,24 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
 
 // Utility function to highlight search terms in text
 function highlightSearchTerm(text: string, searchTerm: string): React.ReactNode {
-  if (!searchTerm.trim()) return text;
-  
-  const parts = text.split(new RegExp(`(${searchTerm})`, 'gi'));
-  
-  return parts.map((part, index) => 
-    part.toLowerCase() === searchTerm.toLowerCase() ? (
-      <span key={index} className="bg-yellow-200 dark:bg-yellow-900/60">
-        {part}
-      </span>
-    ) : (
-      part
-    )
-  );
+  if (!text || !searchTerm.trim()) return text || '';
+
+  try {
+    const parts = text.split(new RegExp(`(${searchTerm})`, 'gi'));
+
+    return parts.map((part, index) =>
+      part.toLowerCase() === searchTerm.toLowerCase() ? (
+        <span key={index} className="bg-yellow-200 dark:bg-yellow-900/60">
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+  } catch (error) {
+    console.error('Error highlighting search term:', error);
+    return text || '';
+  }
 }
 
 export default TranscriptDisplay;
