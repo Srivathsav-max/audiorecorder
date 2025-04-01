@@ -3,6 +3,7 @@ import { prisma } from './prisma';
 import { getFormattedDateTime } from '@/components/AudioRecorder/utils';
 import { TranscriptionData, SummaryData } from '@/lib/api-client';
 import { Prisma } from '@prisma/client';
+import { getBackendUrl } from './settings-service';
 
 export const getAudioFileUrl = (fileId: string): string => {
   if (!fileId) return '';
@@ -45,13 +46,15 @@ export const processAudio = async (audioFile: File): Promise<ProcessAudioResult>
     formData.append('transcribe', 'true');
     formData.append('summarize', 'true');
 
-    const response = await fetch('http://localhost:5512/api/process', {
+    const backendUrl = await getBackendUrl();
+    const response = await fetch(`${backendUrl}/api/process`, {
       method: 'POST',
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to process audio: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Failed to process audio: ${response.statusText}. ${errorText}`);
     }
 
     const result = await response.json();

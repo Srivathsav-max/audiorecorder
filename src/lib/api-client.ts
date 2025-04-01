@@ -1,5 +1,6 @@
 import { getCookie, AUTH_COOKIE_NAME } from "@/lib/cookies";
 import jwt from 'jsonwebtoken';
+import { getBackendUrl } from './settings-service';
 
 /**
  * Types for API responses
@@ -311,6 +312,8 @@ class ApiClient {
       // First update the recording status to PROCESSING
       await this.updateRecordingProcessingStatus(recordingId, 'PROCESSING');
 
+      const backendUrl = await getBackendUrl();
+
       // Fetch the audio file with authentication headers
       const token = getCookie(AUTH_COOKIE_NAME);
       const audioResponse = await fetch(audioUrl, {
@@ -347,9 +350,7 @@ class ApiClient {
       formData.append('recordingId', recordingId);
 
       // Connect to our Speech2Transcript API
-      // Get the base URL from environment variables or use a fallback
-      const apiBaseUrl = process.env.NEXT_PUBLIC_SPEECH2TRANSCRIPT_API_URL || 'http://localhost:5512/api';
-      const SPEECH_TO_TRANSCRIPT_API = `${apiBaseUrl}/process`;
+      const SPEECH_TO_TRANSCRIPT_API = `${backendUrl}/api/process`;
 
       console.log('Sending request to:', SPEECH_TO_TRANSCRIPT_API);
 
@@ -426,10 +427,8 @@ class ApiClient {
         throw new Error('No transcription data available for this recording');
       }
 
-      // Send the transcript to the Speech2Transcript API for regenerating summary
-      // Get the base URL from environment variables or use a fallback
-      const apiBaseUrl = process.env.NEXT_PUBLIC_SPEECH2TRANSCRIPT_API_URL || 'http://localhost:5512/api';
-      const SPEECH_TO_TRANSCRIPT_API = `${apiBaseUrl}/regenerate`;
+      const backendUrl = await getBackendUrl();
+      const SPEECH_TO_TRANSCRIPT_API = `${backendUrl}/api/regenerate`;
 
       const apiResponse = await fetch(SPEECH_TO_TRANSCRIPT_API, {
         method: 'POST',

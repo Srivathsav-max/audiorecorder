@@ -39,16 +39,24 @@ model Recording {
   combinedAudioFileId   String?
   transcriptionData     Json?      @db.JsonB
   summaryData          Json?      @db.JsonB
-  processingStatus     String     @default("PENDING")  // PENDING, COMPLETED, ERROR
+  processingStatus     ProcessingStatus @default(PENDING)
   processedAt         DateTime?
 
   @@index([userId])
   @@index([processingStatus])
 }
 
+enum ProcessingStatus {
+  PENDING
+  SAVED
+  COMPLETED
+  ERROR
+}
+
 model AppSettings {
   id                  String    @id @default("app-settings")
   registrationEnabled Boolean   @default(true)
+  backendUrl          String    @default("http://localhost:8000")
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }

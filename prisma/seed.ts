@@ -11,6 +11,7 @@ async function main() {
     update: {},
     create: {
       registrationEnabled: true,
+      backendUrl: process.env.NEXT_PUBLIC_SPEECH2TRANSCRIPT_API_URL || 'http://localhost:8000',
     },
   });
 

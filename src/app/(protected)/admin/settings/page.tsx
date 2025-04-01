@@ -16,6 +16,7 @@ import { Check, AlertCircle, Save, Settings } from 'lucide-react';
 
 interface AppSettingsData {
   registrationEnabled: boolean;
+  backendUrl: string;
 }
 
 export default function AdminSettingsPage() {
@@ -27,6 +28,7 @@ export default function AdminSettingsPage() {
   
   // Form state
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  const [backendUrl, setBackendUrl] = useState('http://localhost:8000');
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
@@ -36,10 +38,11 @@ export default function AdminSettingsPage() {
   // Track changes to settings
   useEffect(() => {
     if (settings) {
-      const hasChanged = registrationEnabled !== settings.registrationEnabled;
+      const hasChanged = registrationEnabled !== settings.registrationEnabled ||
+                        backendUrl !== settings.backendUrl;
       setHasChanges(hasChanged);
     }
-  }, [settings, registrationEnabled]);
+  }, [settings, registrationEnabled, backendUrl]);
 
   async function fetchSettings() {
     try {
@@ -66,6 +69,7 @@ export default function AdminSettingsPage() {
       const data = await response.json();
       setSettings(data);
       setRegistrationEnabled(data.registrationEnabled);
+      setBackendUrl(data.backendUrl);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
@@ -97,6 +101,7 @@ export default function AdminSettingsPage() {
         },
         body: JSON.stringify({
           registrationEnabled,
+          backendUrl,
         }),
       });
 
@@ -119,6 +124,7 @@ export default function AdminSettingsPage() {
   function resetChanges() {
     if (settings) {
       setRegistrationEnabled(settings.registrationEnabled);
+      setBackendUrl(settings.backendUrl);
       setHasChanges(false);
     }
   }
@@ -154,25 +160,50 @@ export default function AdminSettingsPage() {
               )}
               
               <div className="space-y-8">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">User Registration</h3>
-                  
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="registration-toggle" className="text-base">
-                        Allow New User Registration
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        {registrationEnabled 
-                          ? 'New users can self-register on the platform' 
-                          : 'New users cannot register - only admins can create accounts'}
-                      </p>
+                <div className="space-y-8">
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">User Registration</h3>
+                    
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="registration-toggle" className="text-base">
+                          Allow New User Registration
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          {registrationEnabled 
+                            ? 'New users can self-register on the platform' 
+                            : 'New users cannot register - only admins can create accounts'}
+                        </p>
+                      </div>
+                      <Switch
+                        id="registration-toggle"
+                        checked={registrationEnabled}
+                        onCheckedChange={setRegistrationEnabled}
+                      />
                     </div>
-                    <Switch
-                      id="registration-toggle"
-                      checked={registrationEnabled}
-                      onCheckedChange={setRegistrationEnabled}
-                    />
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Backend Service</h3>
+                    
+                    <div className="space-y-2 rounded-lg border p-4">
+                      <div className="space-y-1">
+                        <Label htmlFor="backend-url" className="text-base">
+                          Backend API URL
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          The URL of the Speech2Transcript microservice (e.g., ngrok URL for port forwarding)
+                        </p>
+                      </div>
+                      <input
+                        id="backend-url"
+                        type="url"
+                        value={backendUrl}
+                        onChange={(e) => setBackendUrl(e.target.value)}
+                        className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm ring-offset-background"
+                        placeholder="https://your-ngrok-url.ngrok.io"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

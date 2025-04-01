@@ -33,11 +33,13 @@ export async function GET(req: NextRequest) {
     if (!settings) {
       return NextResponse.json({
         registrationEnabled: true,
+        backendUrl: 'http://localhost:8000',
       });
     }
 
     return NextResponse.json({
       registrationEnabled: settings.registrationEnabled,
+      backendUrl: settings.backendUrl,
     });
   });
 }
@@ -64,25 +66,31 @@ export async function PUT(req: NextRequest) {
     }
 
     // Get request body
-    const { registrationEnabled } = await req.json();
+    const { registrationEnabled, backendUrl } = await req.json();
 
     // Validate
     if (typeof registrationEnabled !== 'boolean') {
       throw new ApiError('registrationEnabled must be a boolean', 400);
     }
 
+    if (typeof backendUrl !== 'string' || !backendUrl) {
+      throw new ApiError('backendUrl must be a non-empty string', 400);
+    }
+
     // Update or create settings
     const settings = await prisma.appSettings.upsert({
       where: { id: 'app-settings' },
-      update: { registrationEnabled },
+      update: { registrationEnabled, backendUrl },
       create: {
         id: 'app-settings',
         registrationEnabled,
+        backendUrl,
       },
     });
 
     return NextResponse.json({
       registrationEnabled: settings.registrationEnabled,
+      backendUrl: settings.backendUrl,
     });
   });
 }
